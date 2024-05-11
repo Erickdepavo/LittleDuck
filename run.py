@@ -11,14 +11,16 @@ if __name__ == "__main__":
     with open('code.ld', 'r') as file:
         file_contents = file.read()
 
-    result = lexer.input(file_contents)
-    result = list(map(lambda x: x.type, result))
-    # print(result)
+    tokens = lexer.input(file_contents)
+    result = list(map(lambda x: x.type, tokens))
+    print(result)
     print("File tokenized successfully")
 
     # Build the parser
     parser = LittleDuckParser()
 
     # Test it
-    parser.parse(file_contents, lexer=lexer)
+    tree = parser.parse(file_contents, lexer=lexer)
+    print(tree)
+
     print("File parsed successfully")
