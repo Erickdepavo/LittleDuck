@@ -1,0 +1,11 @@
+{
+  "[python]": {
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "mypy-type-checker.args": [
+    "--ignore-missing-imports"
+  ]
+}
+  
