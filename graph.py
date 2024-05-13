@@ -1,7 +1,20 @@
-from pygraphviz import AGraph
 from typing import Optional
-from little_duck import LittleDuckLexer, LittleDuckParser, LittleDuckAnalyzer
-from little_duck.nodes import ASTNode, DeclareVariableNode, ExpressionNode, FunctionDeclarationNode, PrimitiveValueNode, ProgramNode, ReadVariableNode, ScopeNode, StatementNode
+
+from pygraphviz import AGraph
+
+from little_duck import LittleDuckAnalyzer, LittleDuckLexer, LittleDuckParser
+from little_duck.nodes import (
+    ASTNode,
+    DeclareVariableNode,
+    ExpressionNode,
+    FunctionDeclarationNode,
+    PrimitiveValueNode,
+    ProgramNode,
+    ReadVariableNode,
+    ScopeNode,
+    StatementNode,
+)
+
 
 def graph_ast(
         node: ASTNode,

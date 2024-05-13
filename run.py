@@ -1,4 +1,4 @@
-from little_duck import LittleDuckLexer, LittleDuckParser, LittleDuckAnalyzer
+from little_duck import LittleDuckAnalyzer, LittleDuckLexer, LittleDuckParser
 from little_duck.errors import SemanticError
 
 #
