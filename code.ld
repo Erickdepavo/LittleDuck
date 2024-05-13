@@ -10,7 +10,7 @@ void function1(id : int) :
 
 float function2(id : float) :
 {
-    return (id + 3.14);
+    print (id + 3.14);
 }
 
 main {

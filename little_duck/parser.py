@@ -1,7 +1,28 @@
+from uuid import uuid4
+
 from ply import yacc
 
-from .lexer import reserved, tokens, LittleDuckLexer
-from .nodes import AssignmentNode, BinaryOperationNode, DeclareVariableNode, FloatPrimitiveValueNode, FunctionDeclarationNode, IfConditionNode, IntegerPrimitiveValueNode, PrintNode, ProgramNode, ReadVariableNode, ScopeNode, StringPrimitiveValueNode, TypeNode, UnaryOperationNode, VoidFunctionCallNode, WhileCycleNode
+from .lexer import LittleDuckLexer, reserved, tokens
+from .nodes import (
+    AssignmentNode,
+    BinaryOperationNode,
+    DeclareVariableNode,
+    FloatPrimitiveValueNode,
+    FunctionDeclarationNode,
+    IfConditionNode,
+    IntegerPrimitiveValueNode,
+    PrintNode,
+    ProgramNode,
+    ReadVariableNode,
+    ScopeNode,
+    StringPrimitiveValueNode,
+    TypeNode,
+    UnaryOperationNode,
+    ValueNode,
+    VoidFunctionCallNode,
+    WhileCycleNode,
+)
+
 
 ###
 ### Parser
@@ -97,7 +118,7 @@ class LittleDuckParser():
 
     def p_body(self, p: yacc.YaccProduction):
         'Body : LBRACE Statements RBRACE'
-        p[0] = ScopeNode(identifier='', statements=p[2])
+        p[0] = ScopeNode(uuid4().hex, p[2])
         pass
 
     def p_statements(self, p: yacc.YaccProduction):
@@ -168,7 +189,7 @@ class LittleDuckParser():
         '''Expresion : Expresion NOTEQUALS Exp
                     | Expresion LESS Exp
                     | Expresion GREATER Exp'''
-        p[0] = BinaryOperationNode('', p[2], p[1], p[3])
+        p[0] = BinaryOperationNode(None, p[2], p[1], p[3])
         pass
 
     def p_expresion_passthrough(self, p: yacc.YaccProduction):
@@ -179,7 +200,7 @@ class LittleDuckParser():
     def p_exp(self, p: yacc.YaccProduction):
         '''Exp : Exp PLUS Term
                | Exp MINUS Term'''
-        p[0] = BinaryOperationNode('', p[2], p[1], p[3])
+        p[0] = BinaryOperationNode(None, p[2], p[1], p[3])
         pass
 
     def p_exp_passthrough(self, p: yacc.YaccProduction):
@@ -190,7 +211,7 @@ class LittleDuckParser():
     def p_term(self, p: yacc.YaccProduction):
         '''Term : Term TIMES Factor
                 | Term DIVIDE Factor'''
-        p[0] = BinaryOperationNode('', p[2], p[1], p[3])
+        p[0] = BinaryOperationNode(None, p[2], p[1], p[3])
         pass
 
     def p_term_passthrough(self, p: yacc.YaccProduction):
@@ -207,7 +228,7 @@ class LittleDuckParser():
         'Factor : MINUS Subfactor'
         # '''Factor : PLUS Subfactor
         #           | MINUS Subfactor'''
-        p[0] = UnaryOperationNode('', p[1], p[2])
+        p[0] = UnaryOperationNode(None, p[1], p[2])
         pass
 
     def p_factor_subfactor(self, p: yacc.YaccProduction):
@@ -222,22 +243,22 @@ class LittleDuckParser():
 
     def p_subfactor_id(self, p: yacc.YaccProduction):
         'Subfactor : ID'
-        p[0] = ReadVariableNode(type='', identfier=p[1])
+        p[0] = ReadVariableNode(None, p[1])
         pass
 
     def p_cte_float(self, p: yacc.YaccProduction):
         'CTE : CTE_FLOAT'
-        p[0] = FloatPrimitiveValueNode(value=p[1])
+        p[0] = ValueNode(None, FloatPrimitiveValueNode(value=p[1]))
         pass
 
     def p_cte_int(self, p: yacc.YaccProduction):
         'CTE : CTE_INT'
-        p[0] = IntegerPrimitiveValueNode(value=p[1])
+        p[0] = ValueNode(None, IntegerPrimitiveValueNode(value=p[1]))
         pass
 
     def p_cte_string(self, p: yacc.YaccProduction):
         'CTE : CTE_STRING'
-        p[0] = StringPrimitiveValueNode(value=p[1])
+        p[0] = ValueNode(None, StringPrimitiveValueNode(value=p[1]))
         pass
 
     def p_epsilon(self, p: yacc.YaccProduction):

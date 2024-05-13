@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
+
 #
 # Base Nodes
 #
@@ -12,13 +13,15 @@ class ASTNode:
 class TypeNode(ASTNode):
     identifier: str
 
+    
+
 @dataclass
 class StatementNode(ASTNode):
     pass
 
 @dataclass
 class ExpressionNode(ASTNode):
-    type: str
+    type: Optional[TypeNode]
 
 @dataclass
 class PrimitiveValueNode(ASTNode):
@@ -69,7 +72,7 @@ class UnaryOperationNode(ExpressionNode):
 
 @dataclass
 class ReadVariableNode(ExpressionNode):
-    identfier: str
+    identifier: str
 
 @dataclass
 class ValueNode(ExpressionNode):
@@ -84,9 +87,30 @@ class ValueNode(ExpressionNode):
 # Statements
 #
 @dataclass
+class DeclareVariableNode(StatementNode):
+    identifier: str
+    type: TypeNode
+
+@dataclass
 class AssignmentNode(StatementNode):
     identifier: str
     value: ExpressionNode
+
+@dataclass
+class FunctionDeclarationNode(StatementNode):
+    identifier: str
+    type: Optional[TypeNode]
+    parameters: List[DeclareVariableNode]
+    body: ScopeNode
+
+@dataclass
+class VoidFunctionCallNode(StatementNode):
+    identifier: str
+    arguments: List[ExpressionNode]
+
+@dataclass
+class PrintNode(StatementNode):
+    arguments: List[ExpressionNode]
 
 @dataclass
 class IfConditionNode(StatementNode):
@@ -99,39 +123,12 @@ class WhileCycleNode(StatementNode):
     condition: ExpressionNode
     body: ScopeNode
 
-@dataclass
-class VoidFunctionCallNode(StatementNode):
-    identifier: str
-    arguments: List[ExpressionNode]
-
-@dataclass
-class PrintNode(StatementNode):
-    arguments: List[ExpressionNode]
-
 #
-# Program Nodes
+# Program Node
 #
-@dataclass
-class DeclareVariableNode(ASTNode):
-    identifier: str
-    type: TypeNode
-
-# @dataclass
-# class FuncParameterNode(ASTNode):
-#     identifier: str
-#     type: TypeNode
-
-@dataclass
-class FunctionDeclarationNode(ASTNode):
-    identifier: str
-    type: Optional[TypeNode]
-    parameters: List[DeclareVariableNode]
-    body: ScopeNode
-
 @dataclass
 class ProgramNode(ASTNode):
     identifier: str
     global_vars: List[DeclareVariableNode]
     global_funcs: List[FunctionDeclarationNode]
     body: ScopeNode
-

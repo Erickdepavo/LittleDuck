@@ -1,4 +1,5 @@
-from little_duck import LittleDuckLexer, LittleDuckParser
+from little_duck import LittleDuckLexer, LittleDuckParser, LittleDuckAnalyzer
+from little_duck.errors import SemanticError
 
 #
 # Test the compiler
@@ -24,3 +25,12 @@ if __name__ == "__main__":
     print(tree)
 
     print("File parsed successfully")
+
+    # Analyze
+    analyzer = LittleDuckAnalyzer(debug=True)
+
+    try:
+        analyzer.analyze(tree)
+        print("File analyzed successfully")
+    except SemanticError as error:
+        print("SemanticError:", error.message)
