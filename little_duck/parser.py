@@ -45,13 +45,18 @@ class LittleDuckParser():
         pass
 
     def p_vars(self, p: yacc.YaccProduction):
-        'VARS : VARS VAR ListaVars COLON TYPE SEMICOLON'
-        p[0] = p[1] + list(map(lambda id: DeclareVariableNode(id, p[5]), p[3]))
+        'VARS : VARS VarDeclaration'
+        p[0] = p[1] + p[2]
         pass
 
     def p_vars_empty(self, p: yacc.YaccProduction):
         'VARS : epsilon'
         p[0] = [] # Empty list for combining
+        pass
+
+    def p_vars_declaration(self, p: yacc.YaccProduction):
+        'VarDeclaration : VAR ListaVars COLON TYPE SEMICOLON'
+        p[0] = list(map(lambda id: DeclareVariableNode(id, p[4]), p[2]))
         pass
 
     def p_lista_vars_multiple(self, p: yacc.YaccProduction):
@@ -124,6 +129,11 @@ class LittleDuckParser():
     def p_statements(self, p: yacc.YaccProduction):
         'Statements : Statement Statements'
         p[0] = [p[1]] + p[2] # Combine lists
+        pass
+
+    def p_statements_vars(self, p: yacc.YaccProduction):
+        'Statements : VarDeclaration Statements'
+        p[0] = p[1] + p[2] # Combine lists
         pass
 
     def p_statements_empty(self, p: yacc.YaccProduction):

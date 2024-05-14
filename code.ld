@@ -6,6 +6,9 @@ var y, z : float;
 void function1(id : int) :
 {
     x = id * 2;
+    var test: string;
+    test = "Hola Mundo!";
+    print(test);
 }
 
 float function2(id : float) :
