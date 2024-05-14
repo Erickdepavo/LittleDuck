@@ -116,10 +116,10 @@ class LittleDuckParser():
         p[0] = None # Void functions return no type
         pass
 
-    def p_tipofunc_type(self, p: yacc.YaccProduction):
-        'TipoFunc : TYPE'
-        p[0] = p[1] # Passthrough
-        pass
+    # def p_tipofunc_type(self, p: yacc.YaccProduction):
+    #     'TipoFunc : TYPE'
+    #     p[0] = p[1] # Passthrough
+    #     pass
 
     def p_body(self, p: yacc.YaccProduction):
         'Body : LBRACE Statements RBRACE'

@@ -3,6 +3,7 @@ program ValidTest;
 var x : int;
 var y, z : float;
 
+// Comment
 void function1(id : int) :
 {
     x = id * 2;
@@ -11,11 +12,15 @@ void function1(id : int) :
     print(test);
 }
 
-float function2(id : float) :
+/*
+    Block comment
+*/
+void function2(id : float) :
 {
     print (id + 3.14);
 }
 
+/* Inline block comment */
 main {
     x = 10;
     y = 5.0;

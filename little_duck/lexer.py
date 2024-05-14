@@ -84,6 +84,14 @@ class LittleDuckLexer():
         r'\n+'
         t.lexer.lineno += len(t.value)
 
+    def t_COMMENT_BLOCK(self, t):
+        r'\/\*(\*(?!\/)|[^*])*\*\/'
+        pass # No return value. Token discarded
+
+    def t_COMMENT_INLINE(self, t):
+        r'\/\/.*'
+        pass # No return value. Token discarded
+
     # A string containing ignored characters (spaces and tabs)
     t_ignore  = ' \t'
 
