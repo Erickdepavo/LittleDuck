@@ -18,6 +18,7 @@ from .nodes import (
     VoidFunctionCallNode,
     WhileCycleNode,
 )
+from .semantic_cubes import binary_semantic_cubes, unary_semantic_cubes
 from .stack import Stack
 from .tables import FunctionMetadata, Scope, VariableMetadata
 
@@ -259,28 +260,14 @@ class LittleDuckAnalyzer():
         if node.right_side.type is None:
             raise SemanticError("Type of expression could not be inferred", node.right_side)
 
-        # Check if types match
-        if node.left_side.type != node.right_side.type:
-            # Types don't match, so attempt to
-            types = (node.left_side.type.identifier, node.right_side.type.identifier)
-            supported_types = [
-                ('float', 'int'),
-                ('int', 'float'),
-            ]
-            if types in supported_types:
-                # Cast all ints to floats
-                node.left_side.type = TypeNode('float')
-                node.right_side.type = TypeNode('float')
-            else:
-                raise SemanticError(f"Operator '{node.operator}' cannot be used with '{node.left_side.type.identifier}','{node.right_side.type.identifier}' operands", node)
-        
-        # Update type of expression
-        if node.operator in ['<','>','!=']:
-            # For boolean operators, output will always be int
-            node.type = TypeNode('int')
-        else:
-            node.type = node.left_side.type
+        # Check semantic cube for binary operations
+        resulting_type = binary_semantic_cubes[node.operator][node.left_side.type.identifier][node.right_side.type.identifier]
 
+        if resulting_type is None:
+            raise SemanticError(f"Operator '{node.operator}' cannot be used with '{node.left_side.type.identifier}','{node.right_side.type.identifier}' operands", node)
+
+        # Update type of expression
+        node.type = TypeNode(identifier=resulting_type)
         self.log("Performed binary operation", node.operator)
 
     def a_UnaryOperationNode(self, node: UnaryOperationNode):
@@ -291,12 +278,15 @@ class LittleDuckAnalyzer():
         if node.expression.type is None:
             raise SemanticError("Type of expression could not be inferred", node.expression)
 
+        # Check semantic cube for unary operations
+        resulting_type = unary_semantic_cubes[node.operator][node.expression.type.identifier]
+
         # At the moment, no unary operators can be used with string
-        if node.expression.type.identifier == 'string':
-            raise SemanticError(f"Operator '{node.operator}' cannot be used with value of type '{node.expression.type.identifier}'", node)
+        if resulting_type is None:
+            raise SemanticError(f"Unary operator '{node.operator}' cannot be used with value of type '{node.expression.type.identifier}'", node)
         
         # Update type of expression
-        node.type = node.expression.type
+        node.type = TypeNode(identifier=resulting_type)
         self.log("Performed unary operation", node.operator)
 
     # Helpers
