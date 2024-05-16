@@ -95,5 +95,5 @@ if __name__ == "__main__":
     tree = parser.parse(file_contents, lexer=lexer)
     draw_graph(tree, name="ast_parsed")
 
-    new_tree = analyzer.analyze(tree)
-    draw_graph(new_tree, name="ast_analyzed")
+    analyzer.analyze(tree) # Tree will get updated during analysis
+    draw_graph(tree, name="ast_analyzed")
