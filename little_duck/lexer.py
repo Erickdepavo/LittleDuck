@@ -18,12 +18,12 @@ reserved = {
 }
 
 tokens = [
-    'ID', # Identificadores
+    'ID', 'ASSIGN', # Identificadores, asignaciones
     'CTE_INT', 'CTE_FLOAT', 'CTE_STRING', # Literales de tipos
     'COLON', 'SEMICOLON', 'COMMA', # Separadores
     'PLUS', 'MINUS', 'TIMES', 'DIVIDE', # Aritméticos +, -, *, /
     'LPAREN', 'RPAREN', 'LBRACE', 'RBRACE', # Paréntesis y Llaves () {}
-    'ASSIGN', 'NOTEQUALS', 'LESS', 'GREATER', # Símbolos =, <, >, !=
+    'EQUALS', 'NOTEQUALS', 'LESS', 'GREATER', # Símbolos =, <, >, !=
 ] + list(reserved.values())
 
 ###
@@ -53,10 +53,11 @@ class LittleDuckLexer():
     t_RPAREN = r'\)'
     t_LBRACE = r'\{'
     t_RBRACE = r'\}'
-    t_ASSIGN = r'='
+    t_EQUALS = r'=='
     t_NOTEQUALS = r'!='
     t_LESS = r'<'
     t_GREATER = r'>'
+    t_ASSIGN = r'='
 
     def t_ID(self, t):
         r'[a-zA-Z_][a-zA-Z0-9_]*'

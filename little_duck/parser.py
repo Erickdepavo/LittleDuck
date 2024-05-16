@@ -196,7 +196,8 @@ class LittleDuckParser():
         pass
 
     def p_expresion(self, p: yacc.YaccProduction):
-        '''Expresion : Expresion NOTEQUALS Exp
+        '''Expresion : Expresion EQUALS Exp
+                    | Expresion NOTEQUALS Exp
                     | Expresion LESS Exp
                     | Expresion GREATER Exp'''
         p[0] = BinaryOperationNode(None, p[2], p[1], p[3])

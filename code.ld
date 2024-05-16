@@ -27,7 +27,7 @@ main {
     z = x + y;
     function1(x);
     print(x, y);
-    if (x != y) {
+    if (x == y) {
         print(x);
     } else {
         print(y);
