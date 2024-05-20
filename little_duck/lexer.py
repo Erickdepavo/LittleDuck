@@ -87,6 +87,7 @@ class LittleDuckLexer():
 
     def t_COMMENT_BLOCK(self, t):
         r'\/\*(\*(?!\/)|[^*])*\*\/'
+        t.lexer.lineno += len(t.value.split("\n")) - 1
         pass # No return value. Token discarded
 
     def t_COMMENT_INLINE(self, t):
