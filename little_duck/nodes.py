@@ -1,5 +1,7 @@
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, List, Optional
+
+from .quadruples import QuadrupleOperation
 
 
 #
@@ -13,8 +15,6 @@ class ASTNode:
 class TypeNode(ASTNode):
     identifier: str
 
-    
-
 @dataclass
 class StatementNode(ASTNode):
     pass
@@ -26,6 +26,7 @@ class ExpressionNode(ASTNode):
 @dataclass
 class PrimitiveValueNode(ASTNode):
     primitive_type: str
+    value: Any
 
 @dataclass
 class ScopeNode(ASTNode):
@@ -39,21 +40,21 @@ class ScopeNode(ASTNode):
 class StringPrimitiveValueNode(PrimitiveValueNode):
     value: str
     def __init__(self, value: str):
-        super().__init__(primitive_type='string')
+        super().__init__(primitive_type='string', value=value)
         self.value = value
 
 @dataclass
 class IntegerPrimitiveValueNode(PrimitiveValueNode):
     value: int
     def __init__(self, value: int):
-        super().__init__(primitive_type='int')
+        super().__init__(primitive_type='int', value=value)
         self.value = value
 
 @dataclass
 class FloatPrimitiveValueNode(PrimitiveValueNode):
     value: float
     def __init__(self, value: float):
-        super().__init__(primitive_type='float')
+        super().__init__(primitive_type='float', value=value)
         self.value = value
 
 #
@@ -61,13 +62,13 @@ class FloatPrimitiveValueNode(PrimitiveValueNode):
 #
 @dataclass
 class BinaryOperationNode(ExpressionNode):
-    operator: str
+    operator: QuadrupleOperation
     left_side: ExpressionNode
     right_side: ExpressionNode
 
 @dataclass
 class UnaryOperationNode(ExpressionNode):
-    operator: str
+    operator: QuadrupleOperation
     expression: ExpressionNode
 
 @dataclass
@@ -84,7 +85,7 @@ class ValueNode(ExpressionNode):
 #     arguments: List[ExpressionNode]
 
 #
-# Statements
+# Statements & Scopes
 #
 @dataclass
 class DeclareVariableNode(StatementNode):
@@ -97,11 +98,15 @@ class AssignmentNode(StatementNode):
     value: ExpressionNode
 
 @dataclass
+class FunctionScopeNode(ScopeNode):
+    arguments: List[DeclareVariableNode]
+
+@dataclass
 class FunctionDeclarationNode(StatementNode):
     identifier: str
     type: Optional[TypeNode]
     parameters: List[DeclareVariableNode]
-    body: ScopeNode
+    body: FunctionScopeNode
 
 @dataclass
 class VoidFunctionCallNode(StatementNode):

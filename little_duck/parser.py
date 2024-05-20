@@ -9,6 +9,7 @@ from .nodes import (
     DeclareVariableNode,
     FloatPrimitiveValueNode,
     FunctionDeclarationNode,
+    FunctionScopeNode,
     IfConditionNode,
     IntegerPrimitiveValueNode,
     PrintNode,
@@ -22,6 +23,7 @@ from .nodes import (
     VoidFunctionCallNode,
     WhileCycleNode,
 )
+from .quadruples import QuadrupleOperation as Operation
 
 
 ###
@@ -88,7 +90,8 @@ class LittleDuckParser():
 
     def p_funcion(self, p: yacc.YaccProduction):
         'Funcion : TipoFunc ID LPAREN Parametros RPAREN COLON Body'
-        p[0] = FunctionDeclarationNode(p[2], p[1], p[4], p[7])
+        body = FunctionScopeNode(p[7].identifier, p[7].statements, p[4])
+        p[0] = FunctionDeclarationNode(p[2], p[1], p[4], body)
         pass
 
     def p_parametros_multiple(self, p: yacc.YaccProduction):
@@ -200,7 +203,7 @@ class LittleDuckParser():
                     | Expresion NOTEQUALS Exp
                     | Expresion LESS Exp
                     | Expresion GREATER Exp'''
-        p[0] = BinaryOperationNode(None, p[2], p[1], p[3])
+        p[0] = BinaryOperationNode(None, Operation(p[2]), p[1], p[3])
         pass
 
     def p_expresion_passthrough(self, p: yacc.YaccProduction):
@@ -211,7 +214,7 @@ class LittleDuckParser():
     def p_exp(self, p: yacc.YaccProduction):
         '''Exp : Exp PLUS Term
                | Exp MINUS Term'''
-        p[0] = BinaryOperationNode(None, p[2], p[1], p[3])
+        p[0] = BinaryOperationNode(None, Operation(p[2]), p[1], p[3])
         pass
 
     def p_exp_passthrough(self, p: yacc.YaccProduction):
@@ -222,7 +225,7 @@ class LittleDuckParser():
     def p_term(self, p: yacc.YaccProduction):
         '''Term : Term TIMES Factor
                 | Term DIVIDE Factor'''
-        p[0] = BinaryOperationNode(None, p[2], p[1], p[3])
+        p[0] = BinaryOperationNode(None, Operation(p[2]), p[1], p[3])
         pass
 
     def p_term_passthrough(self, p: yacc.YaccProduction):
@@ -239,7 +242,7 @@ class LittleDuckParser():
         'Factor : MINUS Subfactor'
         # '''Factor : PLUS Subfactor
         #           | MINUS Subfactor'''
-        p[0] = UnaryOperationNode(None, p[1], p[2])
+        p[0] = UnaryOperationNode(None, Operation(p[1]), p[2])
         pass
 
     def p_factor_subfactor(self, p: yacc.YaccProduction):

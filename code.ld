@@ -6,10 +6,11 @@ var y, z : float;
 // Comment
 void function1(id : int) :
 {
+    // Comment
     x = id * 2;
     var test: string;
     test = "Hola Mundo!";
-    print(test);
+    print(test, x);
 }
 
 /*
@@ -24,7 +25,7 @@ void function2(id : float) :
 main {
     x = 10;
     y = 5.0;
-    z = x + y;
+    z = x + -y;
     function1(x);
     print(x, y);
     if (x == y) {
@@ -36,5 +37,7 @@ main {
         print(x);
         x = x - 1;
     } while (x != 0);
+    var test: float;
+    test = 9 + 45.0 * 35 / (2 + -3);
 }
 end;

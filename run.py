@@ -1,4 +1,5 @@
 from little_duck import LittleDuckAnalyzer, LittleDuckLexer, LittleDuckParser
+from little_duck.analyzer import qstr
 from little_duck.errors import SemanticError
 
 #
@@ -21,7 +22,7 @@ if __name__ == "__main__":
     parser = LittleDuckParser()
 
     # Test it
-    tree = parser.parse(file_contents, lexer=lexer)
+    tree = parser.parse(file_contents, lexer=LittleDuckLexer())
     print(tree)
 
     print("File parsed successfully")
@@ -30,7 +31,15 @@ if __name__ == "__main__":
     analyzer = LittleDuckAnalyzer(debug=True)
 
     try:
-        analyzer.analyze(tree)
+        quadruples = analyzer.analyze(tree)
+
+        number_width = len(str(len(quadruples)))
+        for i, quadruple in enumerate(quadruples):
+            amount_of_spaces = number_width - len(str(i))
+            spaces = ' ' * amount_of_spaces
+            print(f"{i}:{spaces} ({', '.join(list(map(qstr, quadruple)))})")
+
         print("File analyzed successfully")
+
     except SemanticError as error:
         print("SemanticError:", error.message)

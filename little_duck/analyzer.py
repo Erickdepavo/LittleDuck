@@ -1,23 +1,27 @@
-from typing import List, Optional
+from collections import deque
+from typing import Any, Deque, List, Optional, Tuple
 
 from .errors import SemanticError
 from .nodes import (
     AssignmentNode,
-    ASTNode,
     BinaryOperationNode,
     DeclareVariableNode,
+    ExpressionNode,
     FunctionDeclarationNode,
+    FunctionScopeNode,
     IfConditionNode,
     PrintNode,
     ProgramNode,
     ReadVariableNode,
     ScopeNode,
+    StatementNode,
     TypeNode,
     UnaryOperationNode,
     ValueNode,
     VoidFunctionCallNode,
     WhileCycleNode,
 )
+from .quadruples import PolishVariable, QuadrupleOperation, QuadrupleTempVariable
 from .semantic_cubes import binary_semantic_cubes, unary_semantic_cubes
 from .stack import Stack
 from .tables import FunctionMetadata, Scope, VariableMetadata
@@ -28,16 +32,18 @@ class LittleDuckAnalyzer():
         self.debug = debug
 
         self.scopes = Stack[Scope]()
-        self.types: List[TypeNode] = []
+        self.types: List[TypeNode] = self.default_types()
 
-    def analyze(self, program: ProgramNode):
-        self.scopes = Stack[Scope]()
-        self.types = self.default_types()
+        self.quadruples: List[Tuple] = []
+        self.current_temp: int = 0
+        self.pending_jumps = Stack[int]()
 
+    def analyze(self, program: ProgramNode) -> List[Tuple]:
         # Analyze Program
         self.a_ProgramNode(program)
 
-        return program # Filled up tree, ready for conversion
+        # Return generated quadruples
+        return self.quadruples
 
     #
     # Program & Scope handling
@@ -47,6 +53,7 @@ class LittleDuckAnalyzer():
 
         # Create global scope
         self.scopes.push(Scope())
+        self.quadruples.append((QuadrupleOperation.OPEN_STACK_FRAME, None, None, None))
         self.log("Opened scope", "global")
 
         # Global variables & functions
@@ -60,21 +67,57 @@ class LittleDuckAnalyzer():
 
         # Close global scope
         self.scopes.pop()
+        self.quadruples.append((QuadrupleOperation.CLOSE_STACK_FRAME, None, None, None))
         self.log("Closed scope", "global")
         self.log("Program", node.identifier, "analyzed successfully")
 
     def a_ScopeNode(self, node: ScopeNode):
         # Create scope
         self.scopes.push(Scope(id=self.scopes.size()))
+        self.quadruples.append((QuadrupleOperation.OPEN_STACK_FRAME, None, None, None))
         self.log("Opened scope", node.identifier)
 
         # Analyze statements
         for statement in node.statements:
-            self.analize_node(statement)
+            self.analize_statement_node(statement)
 
         # Delete scope
         self.scopes.pop()
+        self.quadruples.append((QuadrupleOperation.CLOSE_STACK_FRAME, None, None, None))
         self.log("Closed scope", node.identifier)
+
+    def a_FunctionScopeNode(self, node: FunctionScopeNode):
+        # Load args into temp variables
+        for i, argument in enumerate(node.arguments):
+            # Build load quadruple
+            argument_quadruple = (QuadrupleOperation.FUNCTION_LOAD_ARGUMENT, argument.identifier, None, QuadrupleTempVariable(self.current_temp + i))
+            self.quadruples.append(argument_quadruple)
+
+        # Create scope
+        self.scopes.push(Scope(id=self.scopes.size()))
+        self.quadruples.append((QuadrupleOperation.OPEN_STACK_FRAME, None, None, None))
+        self.log("Opened function scope", node.identifier)
+
+        # Analyze first statements (argument declaration & assignment)
+        for i, argument in enumerate(node.arguments):
+            # Build declare quadruple 
+            self.a_DeclareVariableNode(argument)
+
+            # Build assign quadruple 
+            assign_quadruple = (QuadrupleOperation.ASSIGN, argument.identifier, QuadrupleTempVariable(self.current_temp + i), None)
+            self.quadruples.append(assign_quadruple)
+
+        # Increment current temp (because of arg loading)
+        self.current_temp += len(node.arguments)
+
+        # Analyze statements
+        for statement in node.statements:
+            self.analize_statement_node(statement)
+
+        # Delete scope
+        self.scopes.pop()
+        self.quadruples.append((QuadrupleOperation.CLOSE_STACK_FRAME, None, None, None))
+        self.log("Closed function scope", node.identifier)
 
     #
     # Statement analyzers
@@ -93,7 +136,12 @@ class LittleDuckAnalyzer():
         # Variable can be added
         current_scope.add_variable(VariableMetadata(identifier=node.identifier,
                                                     type=node.type.identifier))
-        self.log("Registered variable", node.identifier)
+
+        # Build quadruple
+        quadruple = (QuadrupleOperation.DECLARE, node.identifier, None, None)
+        self.quadruples.append(quadruple)
+
+        self.log("Declared variable", node.identifier)
         
     def a_FunctionDeclarationNode(self, node: FunctionDeclarationNode):
         current_scope = self.scopes.top()
@@ -117,16 +165,21 @@ class LittleDuckAnalyzer():
         current_scope.add_function(FunctionMetadata(identifier=node.identifier,
                                                     type=type_identifier,
                                                     parameters=parameter_list))
-        self.log("Registered function", node.identifier)
+        
+        # Build quadruple
+        quadruple = (QuadrupleOperation.FUNCTION_DECLARATION, node.identifier, None, None)
+        self.quadruples.append(quadruple)
+
+        self.log("Declared function", node.identifier)
 
         # Analize the body
-        node.body.statements = node.parameters + node.body.statements
-        self.a_ScopeNode(node.body)
+        self.a_FunctionScopeNode(node.body)
 
     def a_AssignmentNode(self, node: AssignmentNode):
         # Evaluate expression
         # This will populate the 'type' field
-        self.analize_node(node.value)
+        polish = self.analize_expression_node(node.value)
+        self.log("Assignment expression:", ' '.join(map(qstr, polish)))
 
         if node.value.type is None:
             raise SemanticError("Type of expression could not be inferred", node.value)
@@ -144,6 +197,11 @@ class LittleDuckAnalyzer():
         if variable.type != node.value.type.identifier:
             raise SemanticError(f"Value of type '{node.value.type.identifier}' cannot be assigned to variable of type '{variable.type}'", node)
         
+        # Build quadruple
+        result = self.add_polish_to_quadruples(polish)
+        quadruple = (QuadrupleOperation.ASSIGN, node.identifier, result, None)
+        self.quadruples.append(quadruple)
+
         self.log("Assigned to variable", node.identifier)
 
     def a_VoidFunctionCallNode(self, node: VoidFunctionCallNode):
@@ -166,7 +224,8 @@ class LittleDuckAnalyzer():
 
             # Evaluate expression
             # This will populate the 'type' field
-            self.analize_node(argument)
+            polish_argument = self.analize_expression_node(argument)
+            self.log("Function call argument expression:", ' '.join(map(qstr, polish_argument)))
 
             if argument.type is None:
                 raise SemanticError("Type of expression could not be inferred", argument)
@@ -175,13 +234,32 @@ class LittleDuckAnalyzer():
             if argument.type.identifier != parameter_type:
                 raise SemanticError(f"Parameter '{parameter_name}' is of type '{parameter_type}', not '{argument.type}'", node)
             
+            # Build argument quadruple
+            result = self.add_polish_to_quadruples(polish_argument)
+            argument_quadruple = (QuadrupleOperation.FUNCTION_PARAMETER, result, None, None)
+            self.quadruples.append(argument_quadruple)
+        
+        # Build call quadruple
+        quadruple = (QuadrupleOperation.FUNCTION_CALL, node.identifier, None, None)
+        self.quadruples.append(quadruple)
+
         self.log("Called void function", node.identifier)
 
     def a_PrintNode(self, node: PrintNode):
         # Evaluate arguments
         for argument in node.arguments:
             # Evaluate expression
-            self.analize_node(argument)
+            polish_argument = self.analize_expression_node(argument)
+            self.log("Print argument expression:", ' '.join(map(qstr, polish_argument)))
+
+            # Build argument quadruple
+            result = self.add_polish_to_quadruples(polish_argument)
+            argument_quadruple = (QuadrupleOperation.FUNCTION_PARAMETER, result, None, None)
+            self.quadruples.append(argument_quadruple)
+
+        # Build print quadruple
+        quadruple = (QuadrupleOperation.PRINT, None, None, None)
+        self.quadruples.append(quadruple)
 
         self.log("Printed in console")
 
@@ -190,7 +268,8 @@ class LittleDuckAnalyzer():
 
         # Evaluate expression
         # This will populate the 'type' field
-        self.analize_node(node.condition)
+        polish_condition = self.analize_expression_node(node.condition)
+        self.log("If condition expression:", ' '.join(map(qstr, polish_condition)))
 
         if node.condition.type is None:
             raise SemanticError("Type of expression could not be inferred", node.condition)
@@ -200,10 +279,31 @@ class LittleDuckAnalyzer():
             raise SemanticError("Condition on an If statement must be boolean (type 'int')", node)
         self.log("If condition analyzed")
 
-        # Analyze if and else bodies
+        # Generate quadruples for expression
+        result = self.add_polish_to_quadruples(polish_condition)
+        condition_quadruple = (QuadrupleOperation.GOTOF, result, None, None)
+        self.quadruples.append(condition_quadruple)
+
+        # Track pending jump
+        self.pending_jumps.push(len(self.quadruples) - 1)
+
+        # Analyze if body
         self.a_ScopeNode(node.body)
         if node.else_body:
+            # Create end of if body jump to end of else
+            end_quadruple = (QuadrupleOperation.GOTO, None, None, None)
+            self.quadruples.append(end_quadruple)
+
+            # Correctly handle pending jumps
+            quad_index = self.pending_jumps.pop()
+            self.pending_jumps.push(len(self.quadruples) - 1)
+            self.fill_pending_jump(quad_index)
+
+            # Analyze else body
             self.a_ScopeNode(node.else_body)
+
+        # Fill pending jump
+        self.fill_pending_jump(self.pending_jumps.pop())
 
         self.log("If statement end")
 
@@ -212,7 +312,8 @@ class LittleDuckAnalyzer():
 
         # Evaluate expression
         # This will populate the 'type' field
-        self.analize_node(node.condition)
+        polish_condition = self.analize_expression_node(node.condition)
+        self.log("While condition expression:", ' '.join(map(qstr, polish_condition)))
 
         if node.condition.type is None:
             raise SemanticError("Type of expression could not be inferred", node.condition)
@@ -221,20 +322,51 @@ class LittleDuckAnalyzer():
         if node.condition.type.identifier != 'int':
             raise SemanticError("Condition on a While statement must be boolean (type 'int')", node)
         self.log("While condition analyzed")
-        
+
+        # NOTE: Punto neurálgico 1
+        # Add pending jump to expression evaluation
+        self.pending_jumps.push(len(self.quadruples))
+
+        # Generate quadruples for expression
+        result = self.add_polish_to_quadruples(polish_condition)
+
+        # NOTE: Punto neurálgico 2
+        # Create jump to end of while (condtion not met)
+        condition_quadruple = (QuadrupleOperation.GOTOF, result, None, None)
+        self.quadruples.append(condition_quadruple)
+
+        # Add pending jump to end of while jump (GOTOF quad)
+        self.pending_jumps.push(len(self.quadruples) - 1)
+
         # Analyze cycle body
         self.a_ScopeNode(node.body)
+
+        # NOTE: Punto neurálgico 3
+        # Get index for 
+        end_quad_index = self.pending_jumps.pop()
+        evaluation_quad_index = self.pending_jumps.pop()
+
+        # Create filled jump back to expression evaluation after running body
+        end_quadruple = (QuadrupleOperation.GOTO, None, None, evaluation_quad_index)
+        self.quadruples.append(end_quadruple)
+
+        # Fill pending jump to end of while
+        self.fill_pending_jump(end_quad_index)
+        
         self.log("While statement end")
     
     #
     # Expression analyzers
+    # Must return polish expression as a deque
     #
-    def a_ValueNode(self, node: ValueNode):
+    def a_ValueNode(self, node: ValueNode) -> Deque[Any]:
         # Passthrough value type
         node.type = TypeNode(node.value.primitive_type)
-        self.log("Literal of type", node.value.primitive_type)
+        self.log("Literal of type", node.value.primitive_type, ":", qstr(node.value.value))
+        # Build polish vector to return
+        return deque([node.value.value])
 
-    def a_ReadVariableNode(self, node: ReadVariableNode):
+    def a_ReadVariableNode(self, node: ReadVariableNode) -> Deque[Any]:
         # Check if variable exists
         variable: Optional[VariableMetadata] = None
         for scope in self.scopes:
@@ -249,11 +381,14 @@ class LittleDuckAnalyzer():
         
         self.log("Got variable", node.identifier)
 
-    def a_BinaryOperationNode(self, node: BinaryOperationNode):
+        # Build polish vector to return
+        return deque([PolishVariable(node.identifier)])
+
+    def a_BinaryOperationNode(self, node: BinaryOperationNode) -> Deque[Any]:
         # Evaluate expressions
         # This will populate the 'type' field
-        self.analize_node(node.left_side)
-        self.analize_node(node.right_side)
+        polish_left = self.analize_expression_node(node.left_side)
+        polish_right = self.analize_expression_node(node.right_side)
 
         if node.left_side.type is None:
             raise SemanticError("Type of expression could not be inferred", node.left_side)
@@ -261,36 +396,122 @@ class LittleDuckAnalyzer():
             raise SemanticError("Type of expression could not be inferred", node.right_side)
 
         # Check semantic cube for binary operations
-        resulting_type = binary_semantic_cubes[node.operator][node.left_side.type.identifier][node.right_side.type.identifier]
+        resulting_type = binary_semantic_cubes[node.operator.value][node.left_side.type.identifier][node.right_side.type.identifier]
 
         if resulting_type is None:
-            raise SemanticError(f"Operator '{node.operator}' cannot be used with '{node.left_side.type.identifier}','{node.right_side.type.identifier}' operands", node)
+            raise SemanticError(f"Operator '{node.operator.value}' cannot be used with '{node.left_side.type.identifier}','{node.right_side.type.identifier}' operands", node)
 
         # Update type of expression
         node.type = TypeNode(identifier=resulting_type)
-        self.log("Performed binary operation", node.operator)
+        self.log("Performed binary operation", node.operator.value)
 
-    def a_UnaryOperationNode(self, node: UnaryOperationNode):
+        # Build polish vector to return
+        return deque([node.operator]) + polish_left + polish_right
+
+    def a_UnaryOperationNode(self, node: UnaryOperationNode) -> Deque[Any]:
         # Evaluate expression
         # This will populate the 'type' field
-        self.analize_node(node.expression)
+        polish = self.analize_expression_node(node.expression)
 
         if node.expression.type is None:
             raise SemanticError("Type of expression could not be inferred", node.expression)
 
         # Check semantic cube for unary operations
-        resulting_type = unary_semantic_cubes[node.operator][node.expression.type.identifier]
+        resulting_type = unary_semantic_cubes[node.operator.value][node.expression.type.identifier]
 
         # At the moment, no unary operators can be used with string
         if resulting_type is None:
-            raise SemanticError(f"Unary operator '{node.operator}' cannot be used with value of type '{node.expression.type.identifier}'", node)
+            raise SemanticError(f"Unary operator '{node.operator.value}' cannot be used with value of type '{node.expression.type.identifier}'", node)
         
         # Update type of expression
         node.type = TypeNode(identifier=resulting_type)
-        self.log("Performed unary operation", node.operator)
+        self.log("Performed unary operation", node.operator.value)
+
+        # Build polish vector to return
+        op_deque: Deque[Any] = deque([node.operator])
+        unary_deque: Deque[None] = deque([None])
+        return op_deque + polish + unary_deque
 
     # Helpers
-    def analize_node(self, node: ASTNode):
+    def add_polish_to_quadruples(self, polish: Deque[Any]) -> QuadrupleTempVariable | Any:
+        stack = Stack[Any]([polish.popleft()]) # Stack will always have at least one item
+
+        """
+        This was the original while condition:
+        not (len(stack) == 1 and not isinstance(stack.top(), QuadrupleOperation)):
+
+        Simplified with De Morgan's laws:
+        not (A and not B) -> not A or not not B -> not A or B
+
+        Other simplifications:
+        not len(stack) == 1 -> len(stack) > 1
+        """
+        while len(stack) > 1 or isinstance(stack.top(), QuadrupleOperation):
+            if isinstance(stack.top(), QuadrupleOperation):
+                # Token is operator, just leave in stack
+                pass
+            elif not isinstance(stack.top(), QuadrupleTempVariable):
+                # Token is not operator, pop from stack and process
+                stack.push(self.add_quadruple_from_value(stack.pop()))
+            
+            # See if operation can be processed
+            if (
+                len(stack) > 2 and \
+                isinstance(stack.top(2), QuadrupleOperation) and \
+                not isinstance(stack.top(1), QuadrupleOperation) and \
+                not isinstance(stack.top(0), QuadrupleOperation)
+            ):
+                # Operation can be created
+                right_side_value = stack.pop()
+                left_side_value = stack.pop()
+                operator = stack.pop()
+
+                # Create operation
+                temp_var = QuadrupleTempVariable(self.current_temp)
+                quadruple = (operator, left_side_value, right_side_value, temp_var)
+                self.current_temp += 1
+                self.quadruples.append(quadruple)
+
+                # Save temp var in stack
+                stack.push(temp_var)
+
+            # Read from polish vector if possible
+            if polish:
+                stack.push(polish.popleft())
+
+        # At this point, stack will always have only 1 item
+        # Process and return that remaining item
+        # (remember one item polish vectors skip the while loop entirely)
+        return self.add_quadruple_from_value(stack.pop())
+
+    def add_quadruple_from_value(self, value: Any):
+        if isinstance(value, QuadrupleTempVariable):
+            # Variable has already been added to quadruples
+            return value
+        elif isinstance(value, PolishVariable):
+            # Read variable
+            temp_var = QuadrupleTempVariable(self.current_temp)
+            quadruple = (QuadrupleOperation.READ, value.identifier, None, temp_var)
+            self.current_temp += 1
+            self.quadruples.append(quadruple)
+            return temp_var
+        # elif isinstance(value, PolishFunction):
+        # ...
+        else:
+            # Value here is either temp variable or literal
+            return value
+
+    def fill_pending_jump(self, quad_index: int):
+        old_quadruple = self.quadruples[quad_index]
+        new_quadruple = (old_quadruple[0], old_quadruple[1], old_quadruple[2], len(self.quadruples))
+        self.quadruples[quad_index] = new_quadruple
+
+    def analize_expression_node(self, node: ExpressionNode) -> Deque[Any]:
+        # Analyze depending on node type
+        analyze_node = getattr(self, 'a_' + type(node).__name__)
+        return analyze_node(node)
+
+    def analize_statement_node(self, node: StatementNode):
         # Analyze depending on node type
         analyze_node = getattr(self, 'a_' + type(node).__name__)
         analyze_node(node)
@@ -310,3 +531,12 @@ class LittleDuckAnalyzer():
     def log(self, *args):
         if self.debug:
             print(*args)
+
+def qstr(value) -> str:
+    if isinstance(value, str):
+        return f'"{value}"'
+    elif isinstance(value, PolishVariable):
+        return value.identifier
+    elif isinstance(value, QuadrupleOperation):
+        return value.value
+    return str(value)
