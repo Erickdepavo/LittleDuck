@@ -198,7 +198,7 @@ class LittleDuckAnalyzer():
             raise SemanticError(f"Value of type '{node.value.type.identifier}' cannot be assigned to variable of type '{variable.type}'", node)
         
         # Build quadruple
-        result = self.add_polish_to_quadruples(polish)
+        result = self.process_polish_expression(polish)
         quadruple = (QuadrupleOperation.ASSIGN, node.identifier, result, None)
         self.quadruples.append(quadruple)
 
@@ -235,7 +235,7 @@ class LittleDuckAnalyzer():
                 raise SemanticError(f"Parameter '{parameter_name}' is of type '{parameter_type}', not '{argument.type}'", node)
             
             # Build argument quadruple
-            result = self.add_polish_to_quadruples(polish_argument)
+            result = self.process_polish_expression(polish_argument)
             argument_quadruple = (QuadrupleOperation.FUNCTION_PARAMETER, result, None, None)
             self.quadruples.append(argument_quadruple)
         
@@ -253,7 +253,7 @@ class LittleDuckAnalyzer():
             self.log("Print argument expression:", ' '.join(map(qstr, polish_argument)))
 
             # Build argument quadruple
-            result = self.add_polish_to_quadruples(polish_argument)
+            result = self.process_polish_expression(polish_argument)
             argument_quadruple = (QuadrupleOperation.FUNCTION_PARAMETER, result, None, None)
             self.quadruples.append(argument_quadruple)
 
@@ -279,8 +279,9 @@ class LittleDuckAnalyzer():
             raise SemanticError("Condition on an If statement must be boolean (type 'int')", node)
         self.log("If condition analyzed")
 
+        # NOTE: Punto neurálgico 1
         # Generate quadruples for expression
-        result = self.add_polish_to_quadruples(polish_condition)
+        result = self.process_polish_expression(polish_condition)
         condition_quadruple = (QuadrupleOperation.GOTOF, result, None, None)
         self.quadruples.append(condition_quadruple)
 
@@ -290,6 +291,7 @@ class LittleDuckAnalyzer():
         # Analyze if body
         self.a_ScopeNode(node.body)
         if node.else_body:
+            # NOTE: Punto neurálgico 3
             # Create end of if body jump to end of else
             end_quadruple = (QuadrupleOperation.GOTO, None, None, None)
             self.quadruples.append(end_quadruple)
@@ -302,6 +304,7 @@ class LittleDuckAnalyzer():
             # Analyze else body
             self.a_ScopeNode(node.else_body)
 
+        # NOTE: Punto neurálgico 2
         # Fill pending jump
         self.fill_pending_jump(self.pending_jumps.pop())
 
@@ -328,7 +331,7 @@ class LittleDuckAnalyzer():
         self.pending_jumps.push(len(self.quadruples))
 
         # Generate quadruples for expression
-        result = self.add_polish_to_quadruples(polish_condition)
+        result = self.process_polish_expression(polish_condition)
 
         # NOTE: Punto neurálgico 2
         # Create jump to end of while (condtion not met)
@@ -342,7 +345,7 @@ class LittleDuckAnalyzer():
         self.a_ScopeNode(node.body)
 
         # NOTE: Punto neurálgico 3
-        # Get index for 
+        # Get where to fill for evaluation and end of while
         end_quad_index = self.pending_jumps.pop()
         evaluation_quad_index = self.pending_jumps.pop()
 
@@ -433,7 +436,7 @@ class LittleDuckAnalyzer():
         return op_deque + polish + unary_deque
 
     # Helpers
-    def add_polish_to_quadruples(self, polish: Deque[Any]) -> QuadrupleTempVariable | Any:
+    def process_polish_expression(self, polish: Deque[Any]):
         stack = Stack[Any]([polish.popleft()]) # Stack will always have at least one item
 
         """
@@ -446,13 +449,11 @@ class LittleDuckAnalyzer():
         Other simplifications:
         not len(stack) == 1 -> len(stack) > 1
         """
+        # Avoid exiting if there are pending operations in the stack
         while len(stack) > 1 or isinstance(stack.top(), QuadrupleOperation):
-            if isinstance(stack.top(), QuadrupleOperation):
-                # Token is operator, just leave in stack
-                pass
-            elif not isinstance(stack.top(), QuadrupleTempVariable):
-                # Token is not operator, pop from stack and process
-                stack.push(self.add_quadruple_from_value(stack.pop()))
+            if isinstance(stack.top(), PolishVariable):
+                # Token needs to be processed
+                stack.push(self.process_polish_token(stack.pop()))
             
             # See if operation can be processed
             if (
@@ -482,9 +483,9 @@ class LittleDuckAnalyzer():
         # At this point, stack will always have only 1 item
         # Process and return that remaining item
         # (remember one item polish vectors skip the while loop entirely)
-        return self.add_quadruple_from_value(stack.pop())
+        return self.process_polish_token(stack.pop())
 
-    def add_quadruple_from_value(self, value: Any):
+    def process_polish_token(self, value: Any):
         if isinstance(value, QuadrupleTempVariable):
             # Variable has already been added to quadruples
             return value
