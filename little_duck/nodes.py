@@ -57,6 +57,13 @@ class FloatPrimitiveValueNode(PrimitiveValueNode):
         super().__init__(primitive_type='float', value=value)
         self.value = value
 
+@dataclass
+class BoolPrimitiveValueNode(PrimitiveValueNode):
+    value: bool
+    def __init__(self, value: bool):
+        super().__init__(primitive_type='bool', value=value)
+        self.value = value
+
 #
 # Expressions
 #

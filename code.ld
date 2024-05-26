@@ -4,7 +4,7 @@ var x : int;
 var y, z : float;
 
 // Comment
-void function1(id : int) :
+void function1(id : int) : 
 {
     // Comment
     x = id * 2;
@@ -26,6 +26,8 @@ main {
     x = 10;
     y = 5.0;
     z = x + -y;
+    var new: bool;
+    new = true;
     function1(x);
     print(x, y);
     if (x == y) {
@@ -39,5 +41,8 @@ main {
     } while (x != 0);
     var test: float;
     test = 9 + 45.0 * 35 / (2 + -3);
+    if (false && !false || -0) {
+        print("Funciona");
+    }
 }
 end;

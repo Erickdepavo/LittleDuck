@@ -6,6 +6,7 @@ from .lexer import LittleDuckLexer, reserved, tokens
 from .nodes import (
     AssignmentNode,
     BinaryOperationNode,
+    BoolPrimitiveValueNode,
     DeclareVariableNode,
     FloatPrimitiveValueNode,
     FunctionDeclarationNode,
@@ -74,7 +75,8 @@ class LittleDuckParser():
     def p_type(self, p: yacc.YaccProduction):
         '''TYPE : INT
                 | FLOAT
-                | STRING'''
+                | STRING
+                | BOOL'''
         p[0] = TypeNode(p[1])
         pass
 
@@ -199,15 +201,26 @@ class LittleDuckParser():
         pass
 
     def p_expresion(self, p: yacc.YaccProduction):
-        '''Expresion : Expresion EQUALS Exp
-                    | Expresion NOTEQUALS Exp
-                    | Expresion LESS Exp
-                    | Expresion GREATER Exp'''
+        '''Expresion : Expresion AND Subexpresion
+                     | Expresion OR Subexpresion'''
         p[0] = BinaryOperationNode(None, Operation(p[2]), p[1], p[3])
         pass
 
     def p_expresion_passthrough(self, p: yacc.YaccProduction):
-        '''Expresion : Exp'''
+        '''Expresion : Subexpresion'''
+        p[0] = p[1] # Passthrough
+        pass
+
+    def p_subexpresion(self, p: yacc.YaccProduction):
+        '''Subexpresion : Subexpresion EQUALS Exp
+                        | Subexpresion NOTEQUALS Exp
+                        | Subexpresion LESS Exp
+                        | Subexpresion GREATER Exp'''
+        p[0] = BinaryOperationNode(None, Operation(p[2]), p[1], p[3])
+        pass
+
+    def p_subexpresion_passthrough(self, p: yacc.YaccProduction):
+        '''Subexpresion : Exp'''
         p[0] = p[1] # Passthrough
         pass
 
@@ -239,9 +252,8 @@ class LittleDuckParser():
         pass
 
     def p_factor_op(self, p: yacc.YaccProduction):
-        'Factor : MINUS Subfactor'
-        # '''Factor : PLUS Subfactor
-        #           | MINUS Subfactor'''
+        '''Factor : MINUS Subfactor
+                  | NOT Subfactor'''
         p[0] = UnaryOperationNode(None, Operation(p[1]), p[2])
         pass
 
@@ -275,15 +287,20 @@ class LittleDuckParser():
         p[0] = ValueNode(None, StringPrimitiveValueNode(value=p[1]))
         pass
 
+    def p_cte_bool(self, p: yacc.YaccProduction):
+        'CTE : CTE_BOOL'
+        p[0] = ValueNode(None, BoolPrimitiveValueNode(value=p[1]))
+        pass
+
     def p_epsilon(self, p: yacc.YaccProduction):
         'epsilon :'
         pass
 
     def p_error(self, p):
-        print('Token in error:', p)
+        # print('Token in error:', p)
         if p:
-            print(f"Syntax error '{p.value}' on line {p.lineno} {p}")
+            # print(f"Syntax error '{p.value}' on line {p.lineno} {p}")
             raise SyntaxError(f"Syntax error '{p.value}' on line {p.lineno} {p}")
         else:
-            print("Syntax error at EOF")
+            # print("Syntax error at EOF")
             raise SyntaxError("Syntax error at EOF")

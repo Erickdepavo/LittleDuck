@@ -2,33 +2,53 @@ from typing import Dict, Optional
 
 SemanticCube = Dict[str, Dict[str, Optional[str]]]
 
-# Suma: Numeros entre ellos, String solo entre sí
+# Suma
+# Int: int + int = int, el resto = float
+# Float: Con int, float = float
+# Strings: Sólo string + string = string
+# Booleanos: No compatible (usar operación OR)
 addition_matrix: SemanticCube = {
-    'int': { 'int': 'int', 'float': 'float', 'string': None },
-    'float': { 'int': 'float', 'float': 'float', 'string': None },
-    'string': { 'int': None, 'float': None, 'string': 'string' },
+    'int': { 'int': 'int', 'float': 'float', 'string': None, 'bool': None },
+    'float': { 'int': 'float', 'float': 'float', 'string': None, 'bool': None },
+    'string': { 'int': None, 'float': None, 'string': 'string', 'bool': None },
+    'bool': { 'int': None, 'float': None, 'string': None, 'bool': None },
 }
 
-# Multiplicación: Números entre ellos, String no compatible
+# Multiplicación
+# Int: int + int = int, el resto = float
+# Float: Con float, int = float
+# Strings: No compatible
+# Booleanos: No compatible (usar operación AND)
 multiplication_matrix: SemanticCube = {
-    'int': { 'int': 'int', 'float': 'float', 'string': None },
-    'float': { 'int': 'float', 'float': 'float', 'string': None },
-    'string': { 'int': None, 'float': None, 'string': None },
+    'int': { 'int': 'int', 'float': 'float', 'string': None, 'bool': None },
+    'float': { 'int': 'float', 'float': 'float', 'string': None, 'bool': None },
+    'string': { 'int': None, 'float': None, 'string': None, 'bool': None },
+    'bool': { 'int': None, 'float': None, 'string': None, 'bool': None },
 }
 
-# Comparación: Siempre devuelve int (booleano), Numeros entre ellos, String solo entre sí
+# Comparación
+# Int: Con int, float, bool = bool
+# Float: Con int, float, bool = bool
+# Strings: Sólo string < string = bool
+# Booleanos: Con int, float, bool = bool
 comparison_matrix: SemanticCube = {
-    'int': { 'int': 'int', 'float': 'int', 'string': None },
-    'float': { 'int': 'int', 'float': 'int', 'string': None },
-    'string': { 'int': None, 'float': None, 'string': 'int' },
+    'int': { 'int': 'bool', 'float': 'bool', 'string': None, 'bool': 'bool' },
+    'float': { 'int': 'bool', 'float': 'bool', 'string': None, 'bool': 'bool' },
+    'string': { 'int': None, 'float': None, 'string': 'bool', 'bool': None },
+    'bool': { 'int': 'bool', 'float': 'bool', 'string': None, 'bool': 'bool' },
 }
 
-# TODO: Booleano: Solo ints
-# boolean_matrix: SemanticCube = {
-#     'int': { 'int': 'int', 'float': None, 'string': None },
-#     'float': { 'int': None, 'float': None, 'string': None },
-#     'string': { 'int': None, 'float': None, 'string': None },
-# }
+# Lógicos
+# Int: Con int, bool = bool
+# Float: No compatible
+# Strings: No compatible
+# Booleanos: Con int, bool = bool
+boolean_matrix: SemanticCube = {
+    'int': { 'int': 'bool', 'float': None, 'string': None, 'bool': 'bool' },
+    'float': { 'int': None, 'float': None, 'string': None, 'bool': None },
+    'string': { 'int': None, 'float': None, 'string': None, 'bool': None },
+    'bool': { 'int': 'bool', 'float': None, 'string': None, 'bool': 'bool' },
+}
 
 binary_semantic_cubes = {
     # Aritmética
@@ -41,14 +61,14 @@ binary_semantic_cubes = {
     '!=': comparison_matrix,
     '<': comparison_matrix,
     '>': comparison_matrix,
-    # TODO: Booleanos
-    # '&&': boolean_matrix,
-    # '||': boolean_matrix,
+    # Booleanos
+    '&&': boolean_matrix,
+    '||': boolean_matrix,
 }
 
 unary_semantic_cubes = {
     # Aritmética
     '-': multiplication_matrix['int'],
-    # TODO: Booleanos
-    # '!': boolean_matrix['bool'],
+    # Booleanos
+    '!': boolean_matrix['bool'],
 }

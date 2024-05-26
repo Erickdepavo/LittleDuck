@@ -47,3 +47,4 @@ class QuadrupleOperation(Enum):
     # Boolean
     AND = '&&'
     OR = '||'
+    NOT = '!'

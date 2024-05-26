@@ -15,15 +15,17 @@ reserved = {
     'int': 'INT',
     'float': 'FLOAT',
     'string': 'STRING',
+    'bool': 'BOOL',
 }
 
 tokens = [
     'ID', 'ASSIGN', # Identificadores, asignaciones
-    'CTE_INT', 'CTE_FLOAT', 'CTE_STRING', # Literales de tipos
+    'CTE_INT', 'CTE_FLOAT', 'CTE_STRING', 'CTE_BOOL', # Literales de tipos
     'COLON', 'SEMICOLON', 'COMMA', # Separadores
     'PLUS', 'MINUS', 'TIMES', 'DIVIDE', # Aritméticos +, -, *, /
     'LPAREN', 'RPAREN', 'LBRACE', 'RBRACE', # Paréntesis y Llaves () {}
-    'EQUALS', 'NOTEQUALS', 'LESS', 'GREATER', # Símbolos =, <, >, !=
+    'EQUALS', 'NOTEQUALS', 'LESS', 'GREATER', # Comparadores ==, <, >, !=
+    'AND', 'OR', 'NOT', # Lógicos &&, ||, !
 ] + list(reserved.values())
 
 ###
@@ -53,11 +55,19 @@ class LittleDuckLexer():
     t_RPAREN = r'\)'
     t_LBRACE = r'\{'
     t_RBRACE = r'\}'
+    t_AND = r'&&'
+    t_OR = r'\|\|'
+    t_NOT = r'!'
     t_EQUALS = r'=='
     t_NOTEQUALS = r'!='
     t_LESS = r'<'
     t_GREATER = r'>'
     t_ASSIGN = r'='
+
+    def t_CTE_BOOL(self, t):
+        r'true|false'
+        t.value = t.value == 'true'
+        return t
 
     def t_ID(self, t):
         r'[a-zA-Z_][a-zA-Z0-9_]*'

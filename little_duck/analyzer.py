@@ -21,7 +21,11 @@ from .nodes import (
     VoidFunctionCallNode,
     WhileCycleNode,
 )
-from .quadruples import PolishVariable, QuadrupleOperation, QuadrupleTempVariable
+from .quadruples import (
+    PolishVariable,
+    QuadrupleOperation,
+    QuadrupleTempVariable,
+)
 from .semantic_cubes import binary_semantic_cubes, unary_semantic_cubes
 from .stack import Stack
 from .tables import FunctionMetadata, Scope, VariableMetadata
@@ -275,8 +279,8 @@ class LittleDuckAnalyzer():
             raise SemanticError("Type of expression could not be inferred", node.condition)
 
         # Condition must be boolean (int)
-        if node.condition.type.identifier != 'int':
-            raise SemanticError("Condition on an If statement must be boolean (type 'int')", node)
+        if node.condition.type.identifier != 'bool': 
+            raise SemanticError("Condition on an If statement must be boolean (type 'bool')", node)
         self.log("If condition analyzed")
 
         # NOTE: Punto neurálgico 1
@@ -322,8 +326,8 @@ class LittleDuckAnalyzer():
             raise SemanticError("Type of expression could not be inferred", node.condition)
 
         # Condition must be boolean (int)
-        if node.condition.type.identifier != 'int':
-            raise SemanticError("Condition on a While statement must be boolean (type 'int')", node)
+        if node.condition.type.identifier != 'bool':
+            raise SemanticError("Condition on a While statement must be boolean (type 'bool')", node)
         self.log("While condition analyzed")
 
         # NOTE: Punto neurálgico 1
@@ -435,26 +439,17 @@ class LittleDuckAnalyzer():
         unary_deque: Deque[None] = deque([None])
         return op_deque + polish + unary_deque
 
-    # Helpers
+    #
+    # Polish Expression handling
+    #
     def process_polish_expression(self, polish: Deque[Any]):
-        stack = Stack[Any]([polish.popleft()]) # Stack will always have at least one item
+        stack = Stack[Any]()
 
-        """
-        This was the original while condition:
-        not (len(stack) == 1 and not isinstance(stack.top(), QuadrupleOperation)):
-
-        Simplified with De Morgan's laws:
-        not (A and not B) -> not A or not not B -> not A or B
-
-        Other simplifications:
-        not len(stack) == 1 -> len(stack) > 1
-        """
-        # Avoid exiting if there are pending operations in the stack
-        while len(stack) > 1 or isinstance(stack.top(), QuadrupleOperation):
-            if isinstance(stack.top(), PolishVariable):
-                # Token needs to be processed
-                stack.push(self.process_polish_token(stack.pop()))
-            
+        # Add first item to the stack
+        stack.push(self.process_polish_token(polish.popleft()))
+        
+        # If first token is operation, more operations should be coming
+        while len(stack) > 1 or isinstance(stack.top(), QuadrupleOperation):            
             # See if operation can be processed
             if (
                 len(stack) > 2 and \
@@ -475,10 +470,13 @@ class LittleDuckAnalyzer():
 
                 # Save temp var in stack
                 stack.push(temp_var)
-
-            # Read from polish vector if possible
-            if polish:
-                stack.push(polish.popleft())
+            else:
+                # If no operation is currently possible,
+                # get more tokens from polish vector
+                stack.push(self.process_polish_token(polish.popleft()))
+                # NOTE: Should never crash, because if deque has been
+                # fully read, all operations should be solvable
+                # A crash would indicate this algorithm is wrong
 
         # At this point, stack will always have only 1 item
         # Process and return that remaining item
@@ -502,6 +500,9 @@ class LittleDuckAnalyzer():
             # Value here is either temp variable or literal
             return value
 
+    #
+    # Helpers
+    #
     def fill_pending_jump(self, quad_index: int):
         old_quadruple = self.quadruples[quad_index]
         new_quadruple = (old_quadruple[0], old_quadruple[1], old_quadruple[2], len(self.quadruples))
@@ -526,9 +527,12 @@ class LittleDuckAnalyzer():
             TypeNode(identifier='int'),
             TypeNode(identifier='float'),
             TypeNode(identifier='string'),
+            TypeNode(identifier='bool'),
         ]
 
+    #
     # Debug
+    #
     def log(self, *args):
         if self.debug:
             print(*args)
