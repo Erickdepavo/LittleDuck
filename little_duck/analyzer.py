@@ -28,9 +28,9 @@ from .quadruples import (
     QuadrupleOperation,
     QuadrupleTempVariable,
 )
+from .scope import FunctionMetadata, Scope, VariableMetadata
 from .semantic_cubes import binary_semantic_cubes, unary_semantic_cubes
 from .stack import Stack
-from .tables import FunctionMetadata, Scope, VariableMetadata
 
 
 class LittleDuckAnalyzer():
