@@ -13,9 +13,11 @@ from .nodes import (
     FunctionScopeNode,
     IfConditionNode,
     IntegerPrimitiveValueNode,
+    NonVoidFunctionCallNode,
     PrintNode,
     ProgramNode,
     ReadVariableNode,
+    ReturnStatementNode,
     ScopeNode,
     StringPrimitiveValueNode,
     TypeNode,
@@ -44,7 +46,12 @@ class LittleDuckParser():
     #
     def p_programa(self, p: yacc.YaccProduction):
         'Programa : PROGRAM ID SEMICOLON VARS FUNCS MAIN Body END SEMICOLON'
-        p[0] = ProgramNode(p[2], p[4], p[5], p[7])
+        body = FunctionScopeNode('main', p[7].statements, [])
+        main = FunctionDeclarationNode(identifier='main',
+                                       type=TypeNode('int'),
+                                       parameters=[],
+                                       body=body)
+        p[0] = ProgramNode(p[2], p[4], p[5], main)
         pass
 
     def p_vars(self, p: yacc.YaccProduction):
@@ -92,7 +99,7 @@ class LittleDuckParser():
 
     def p_funcion(self, p: yacc.YaccProduction):
         'Funcion : TipoFunc ID LPAREN Parametros RPAREN COLON Body'
-        body = FunctionScopeNode(p[7].identifier, p[7].statements, p[4])
+        body = FunctionScopeNode(p[2], p[7].statements, p[4])
         p[0] = FunctionDeclarationNode(p[2], p[1], p[4], body)
         pass
 
@@ -121,10 +128,10 @@ class LittleDuckParser():
         p[0] = None # Void functions return no type
         pass
 
-    # def p_tipofunc_type(self, p: yacc.YaccProduction):
-    #     'TipoFunc : TYPE'
-    #     p[0] = p[1] # Passthrough
-    #     pass
+    def p_tipofunc_type(self, p: yacc.YaccProduction):
+        'TipoFunc : TYPE'
+        p[0] = p[1] # Passthrough
+        pass
 
     def p_body(self, p: yacc.YaccProduction):
         'Body : LBRACE Statements RBRACE'
@@ -151,7 +158,8 @@ class LittleDuckParser():
                     | CONDITION
                     | CYCLE
                     | F_Call
-                    | Print'''
+                    | Print
+                    | RETURN'''
         p[0] = p[1] # Passthrough
         pass
 
@@ -184,6 +192,14 @@ class LittleDuckParser():
         'Print : PRINT LPAREN Expresiones RPAREN SEMICOLON'
         p[0] = PrintNode(p[3])
         pass
+
+    def p_return_type(self, p: yacc.YaccProduction):
+        'RETURN : return Expresion SEMICOLON'
+        p[0] = ReturnStatementNode(value=p[2])
+
+    def p_return_void(self, p: yacc.YaccProduction):
+        'RETURN : return SEMICOLON'
+        p[0] = ReturnStatementNode(value=None)
 
     def p_expresiones_multiple(self, p: yacc.YaccProduction):
         'Expresiones : Expresion COMMA Expresiones'
@@ -261,13 +277,18 @@ class LittleDuckParser():
         'Factor : Subfactor'
         p[0] = p[1] # Passthrough
         pass
-    
+
     def p_subfactor_cte(self, p: yacc.YaccProduction):
         'Subfactor : CTE'
         p[0] = p[1] # Passthrough
         pass
 
-    def p_subfactor_id(self, p: yacc.YaccProduction):
+    def p_subfactor_f_call(self, p: yacc.YaccProduction):
+        'Subfactor : ID LPAREN Expresiones RPAREN'
+        p[0] = NonVoidFunctionCallNode(None, p[1], p[3])
+        pass
+
+    def p_subfactor_variable(self, p: yacc.YaccProduction):
         'Subfactor : ID'
         p[0] = ReadVariableNode(None, p[1])
         pass

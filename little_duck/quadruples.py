@@ -24,11 +24,14 @@ class QuadrupleOperation(Enum):
     # Manejo de Stack Frames (Scope)
     OPEN_STACK_FRAME = 'OPEN'
     CLOSE_STACK_FRAME = 'CLOSE'
+    # Estatutos de control de flujo
+    RETURN = 'RETURN'
     # Funciones
     FUNCTION_DECLARATION = 'FUNCTION'
     FUNCTION_LOAD_ARGUMENT = 'ARG'
     FUNCTION_CALL = 'CALL'
     FUNCTION_PARAMETER = 'PARAM'
+    # Acciones de la consola
     PRINT = 'PRINT'
     # Variables
     DECLARE = 'DECLARE'

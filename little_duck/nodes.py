@@ -86,10 +86,10 @@ class ReadVariableNode(ExpressionNode):
 class ValueNode(ExpressionNode):
     value: PrimitiveValueNode
 
-# @dataclass
-# class NonVoidFunctionCallNode(ExpressionNode):
-#     identifier: str
-#     arguments: List[ExpressionNode]
+@dataclass
+class NonVoidFunctionCallNode(ExpressionNode):
+    identifier: str
+    arguments: List[ExpressionNode]
 
 #
 # Statements & Scopes
@@ -135,6 +135,10 @@ class WhileCycleNode(StatementNode):
     condition: ExpressionNode
     body: ScopeNode
 
+@dataclass
+class ReturnStatementNode(StatementNode):
+    value: Optional[ExpressionNode]
+
 #
 # Program Node
 #
@@ -143,4 +147,4 @@ class ProgramNode(ASTNode):
     identifier: str
     global_vars: List[DeclareVariableNode]
     global_funcs: List[FunctionDeclarationNode]
-    body: ScopeNode
+    main_func: FunctionDeclarationNode

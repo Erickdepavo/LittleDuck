@@ -11,7 +11,7 @@ if __name__ == "__main__":
         lexer = LittleDuckLexer()
         file_contents = ""
 
-        with open('code.ld', 'r') as file:
+        with open('algorithms.ld', 'r') as file:
             file_contents = file.read()
 
         tokens = lexer.input(file_contents)

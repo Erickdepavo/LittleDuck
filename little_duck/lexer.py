@@ -16,6 +16,7 @@ reserved = {
     'float': 'FLOAT',
     'string': 'STRING',
     'bool': 'BOOL',
+    'return': 'return',
 }
 
 tokens = [

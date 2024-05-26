@@ -10,9 +10,11 @@ from .nodes import (
     FunctionDeclarationNode,
     FunctionScopeNode,
     IfConditionNode,
+    NonVoidFunctionCallNode,
     PrintNode,
     ProgramNode,
     ReadVariableNode,
+    ReturnStatementNode,
     ScopeNode,
     StatementNode,
     TypeNode,
@@ -67,7 +69,7 @@ class LittleDuckAnalyzer():
             self.a_FunctionDeclarationNode(function)
 
         # Main function
-        self.a_ScopeNode(node.body)
+        self.a_FunctionDeclarationNode(node.main_func)
 
         # Close global scope
         self.scopes.pop()
@@ -98,7 +100,7 @@ class LittleDuckAnalyzer():
             self.quadruples.append(argument_quadruple)
 
         # Create scope
-        self.scopes.push(Scope(id=self.scopes.size()))
+        self.scopes.push(Scope(id=self.scopes.size(), function_name=node.identifier))
         self.quadruples.append((QuadrupleOperation.OPEN_STACK_FRAME, None, None, None))
         self.log("Opened function scope", node.identifier)
 
@@ -209,6 +211,10 @@ class LittleDuckAnalyzer():
         self.log("Assigned to variable", node.identifier)
 
     def a_VoidFunctionCallNode(self, node: VoidFunctionCallNode):
+        # Prohibit calling main
+        if node.identifier == 'main':
+            raise SemanticError("Main function cannot be called from within the program", node)
+
         # Check if function exists
         function: Optional[FunctionMetadata] = None
         for scope in self.scopes:
@@ -362,6 +368,59 @@ class LittleDuckAnalyzer():
         
         self.log("While statement end")
     
+    def a_ReturnStatementNode(self, node: ReturnStatementNode):
+        # Get the function that is returning
+        function_name = 'main'
+        for scope in self.scopes:
+            if scope.function_name is not None:
+                function_name = scope.function_name
+                break
+        
+        # Get the data for that function
+        global_scope = self.scopes.bottom()
+        function = global_scope.get_function(function_name)
+
+        if function is None:
+            # NOTE: This should NEVER happen
+            # Getting this means compiler is broken
+            print("Global scope:", global_scope.functions)
+            raise SemanticError("Return statement is not part of any function", node)
+        
+        # Check if function type matches return type
+        if node.value is not None:
+            # Evaluate expression
+            # This will populate the 'type' field
+            polish = self.analize_expression_node(node.value)
+            self.log("Return statement expression:", ' '.join(map(qstr, polish)))
+
+            if node.value.type is None:
+                raise SemanticError("Type of expression could not be inferred", node.value)
+            
+            # Check function type is not void
+            if function.type is None:
+                raise SemanticError(f"Trying to return {node.value.type.identifier} in void function {function.identifier}", node)
+
+            # Check if types match
+            if node.value.type.identifier != function.type:
+                raise SemanticError(f"Trying to return {node.value.type.identifier} in {function.type} function {function.identifier}", node.value)
+
+            # Build quadruple
+            result = self.process_polish_expression(polish)
+            quadruple = (QuadrupleOperation.RETURN, result, None, None)
+            self.quadruples.append(quadruple)
+
+        else:
+            # Trying to return void
+            # Check function type is void
+            if function.type is not None:
+                raise SemanticError(f"Trying to return void in {function.type} function {function.identifier}", node)
+            
+            # Build quadruple
+            quadruple = (QuadrupleOperation.RETURN, None, None, None)
+            self.quadruples.append(quadruple)
+
+        self.log("Function return statement")
+
     #
     # Expression analyzers
     # Must return polish expression as a deque
@@ -390,6 +449,63 @@ class LittleDuckAnalyzer():
 
         # Build polish vector to return
         return deque([PolishVariable(node.identifier)])
+    
+    def a_NonVoidFunctionCallNode(self, node: NonVoidFunctionCallNode) -> Deque[Any]:
+        # Prohibit calling main
+        if node.identifier == 'main':
+            raise SemanticError("Main function cannot be called from within the program", node)
+
+        # Check if function exists
+        function: Optional[FunctionMetadata] = None
+        for scope in self.scopes:
+            function = scope.get_function(node.identifier)
+            if function is not None:
+                break
+        if function is None:
+            raise SemanticError(f"'{node.identifier}' does not exist in this scope", node)
+        
+        # Check that function is non-void
+        if function.type is None:
+            raise SemanticError("Function that returns void cannot be used as an expression", node)
+
+        # Check if number of arguments match
+        if len(function.parameters) != len(node.arguments):
+            raise SemanticError(f"'{node.identifier}' takes {len(function.parameters)}, but {len(node.arguments)} were provided", node)
+        
+        # Evaluate arguments
+        for i, argument in enumerate(node.arguments):
+            parameter_name, parameter_type = function.parameters[i]
+
+            # Evaluate expression
+            # This will populate the 'type' field
+            polish_argument = self.analize_expression_node(argument)
+            self.log("Function call argument expression:", ' '.join(map(qstr, polish_argument)))
+
+            if argument.type is None:
+                raise SemanticError("Type of expression could not be inferred", argument)
+
+            # Check if types match
+            if argument.type.identifier != parameter_type:
+                raise SemanticError(f"Parameter '{parameter_name}' is of type '{parameter_type}', not '{argument.type}'", node)
+            
+            # Build argument quadruple
+            result = self.process_polish_expression(polish_argument)
+            argument_quadruple = (QuadrupleOperation.FUNCTION_PARAMETER, result, None, None)
+            self.quadruples.append(argument_quadruple)
+        
+        # Update type of expression
+        node.type = TypeNode(function.type)
+
+        # Build call quadruple
+        temp_var = QuadrupleTempVariable(self.current_temp)
+        quadruple = (QuadrupleOperation.FUNCTION_CALL, node.identifier, None, temp_var)
+        self.current_temp += 1
+        self.quadruples.append(quadruple)
+
+        self.log(f"Called {function.type} function", node.identifier)
+
+        # Build polish vector to return
+        return deque([temp_var])
 
     def a_BinaryOperationNode(self, node: BinaryOperationNode) -> Deque[Any]:
         # Evaluate expressions

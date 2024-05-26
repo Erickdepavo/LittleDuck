@@ -14,8 +14,9 @@ class FunctionMetadata():
     parameters: List[Tuple[str, str]]
 
 class Scope():
-    def __init__(self, id: int = 0) -> None:
+    def __init__(self, id: int = 0, function_name: Optional[str] = None) -> None:
         self.id = id
+        self.function_name = function_name
         self.variables: Dict[str, VariableMetadata] = {}
         self.functions: Dict[str, FunctionMetadata] = {}
 
