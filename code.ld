@@ -11,6 +11,7 @@ void function1(id : int) :
     var test: string;
     test = "Hola Mundo!";
     print(test, x);
+    return;
 }
 
 /*
@@ -19,6 +20,7 @@ void function1(id : int) :
 void function2(id : float) :
 {
     print (id + 3.14);
+    return;
 }
 
 /* Inline block comment */
@@ -44,5 +46,6 @@ main {
     if (false && !false || -0) {
         print("Funciona");
     }
+    return 0;
 }
 end;

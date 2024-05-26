@@ -7,11 +7,14 @@ from little_duck.errors import SemanticError
 #
 if __name__ == "__main__":
     try:
+        # file_name = 'code.ld'
+        file_name = 'algorithms.ld'
+
         # Build the lexer
         lexer = LittleDuckLexer()
         file_contents = ""
 
-        with open('algorithms.ld', 'r') as file:
+        with open(file_name, 'r') as file:
             file_contents = file.read()
 
         tokens = lexer.input(file_contents)
@@ -30,7 +33,11 @@ if __name__ == "__main__":
 
         # Analyze
         analyzer = LittleDuckAnalyzer(debug=True)
-        quadruples = analyzer.analyze(tree)
+        quadruples, tables = analyzer.analyze(tree)
+
+        print("File analyzed successfully")
+
+        print(tables)
 
         number_width = len(str(len(quadruples)))
         for i, quadruple in enumerate(quadruples):
@@ -38,7 +45,7 @@ if __name__ == "__main__":
             spaces = ' ' * amount_of_spaces
             print(f"{i}:{spaces} ({', '.join(list(map(qstr, quadruple)))})")
 
-        print("File analyzed successfully")
+        print("File compiled successfully")
 
     except SyntaxError as error:
         print("SyntaxError:", error)

@@ -33,5 +33,7 @@ main {
     print("X:", x);
     print("Factorial:", factorial(x));
     print("Fibonacci:", fibonacci(x));
+
+    return 0;
 }
 end;

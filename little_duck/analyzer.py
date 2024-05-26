@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any, Deque, List, Optional, Tuple
+from typing import Any, Deque, List, Optional, Tuple, cast
 
 from .errors import SemanticError
 from .nodes import (
@@ -28,7 +28,7 @@ from .quadruples import (
     QuadrupleOperation,
     QuadrupleTempVariable,
 )
-from .scope import FunctionMetadata, Scope, VariableMetadata
+from .scope import FunctionMetadata, GlobalScope, Scope, VariableMetadata
 from .semantic_cubes import binary_semantic_cubes, unary_semantic_cubes
 from .stack import Stack
 
@@ -44,21 +44,22 @@ class LittleDuckAnalyzer():
         self.current_temp: int = 0
         self.pending_jumps = Stack[int]()
 
-    def analyze(self, program: ProgramNode) -> List[Tuple]:
+    def analyze(self, program: ProgramNode) -> Tuple[List[Tuple], GlobalScope]:
         # Analyze Program
-        self.a_ProgramNode(program)
+        global_scope = self.a_ProgramNode(program)
 
-        # Return generated quadruples
-        return self.quadruples
+        # Return generated quadruples and tables
+        return self.quadruples, global_scope
 
     #
     # Program & Scope handling
     #
-    def a_ProgramNode(self, node: ProgramNode):
+    def a_ProgramNode(self, node: ProgramNode) -> GlobalScope:
         self.log("Analyzing program", node.identifier)
 
         # Create global scope
-        self.scopes.push(Scope())
+        global_scope = GlobalScope()
+        self.scopes.push(global_scope)
         self.quadruples.append((QuadrupleOperation.OPEN_STACK_FRAME, None, None, None))
         self.log("Opened scope", "global")
 
@@ -77,7 +78,11 @@ class LittleDuckAnalyzer():
         self.log("Closed scope", "global")
         self.log("Program", node.identifier, "analyzed successfully")
 
+        return global_scope
+
     def a_ScopeNode(self, node: ScopeNode):
+        parent_scope = self.scopes.top()
+
         # Create scope
         self.scopes.push(Scope(id=self.scopes.size()))
         self.quadruples.append((QuadrupleOperation.OPEN_STACK_FRAME, None, None, None))
@@ -87,12 +92,18 @@ class LittleDuckAnalyzer():
         for statement in node.statements:
             self.analize_statement_node(statement)
 
-        # Delete scope
-        self.scopes.pop()
+        # Close scope
+        closed_scope = self.scopes.pop()
         self.quadruples.append((QuadrupleOperation.CLOSE_STACK_FRAME, None, None, None))
+
+        # Save closed scope in parent
+        parent_scope.inner_scopes.append(closed_scope)
+
         self.log("Closed scope", node.identifier)
 
     def a_FunctionScopeNode(self, node: FunctionScopeNode):
+        parent_scope = self.scopes.top()
+
         # Load args into temp variables
         for i, argument in enumerate(node.arguments):
             # Build load quadruple
@@ -109,9 +120,10 @@ class LittleDuckAnalyzer():
             # Build declare quadruple 
             self.a_DeclareVariableNode(argument)
 
-            # Build assign quadruple 
+            # Build assign quadruple
             assign_quadruple = (QuadrupleOperation.ASSIGN, argument.identifier, QuadrupleTempVariable(self.current_temp + i), None)
             self.quadruples.append(assign_quadruple)
+            self.scopes.top().variables[argument.identifier].is_initialized = True
 
         # Increment current temp (because of arg loading)
         self.current_temp += len(node.arguments)
@@ -121,8 +133,12 @@ class LittleDuckAnalyzer():
             self.analize_statement_node(statement)
 
         # Delete scope
-        self.scopes.pop()
+        closed_scope = self.scopes.pop()
         self.quadruples.append((QuadrupleOperation.CLOSE_STACK_FRAME, None, None, None))
+
+        # Save closed scope in parent
+        parent_scope.inner_scopes.append(closed_scope)
+
         self.log("Closed function scope", node.identifier)
 
     #
@@ -141,7 +157,9 @@ class LittleDuckAnalyzer():
 
         # Variable can be added
         current_scope.add_variable(VariableMetadata(identifier=node.identifier,
-                                                    type=node.type.identifier))
+                                                    type=node.type.identifier,
+                                                    is_initialized=False,
+                                                    is_used=False))
 
         # Build quadruple
         quadruple = (QuadrupleOperation.DECLARE, node.identifier, None, None)
@@ -150,10 +168,10 @@ class LittleDuckAnalyzer():
         self.log("Declared variable", node.identifier)
         
     def a_FunctionDeclarationNode(self, node: FunctionDeclarationNode):
-        current_scope = self.scopes.top()
+        global_scope = cast(GlobalScope, self.scopes.bottom())
 
         # Check if function already existed
-        if current_scope.has_function(node.identifier):
+        if global_scope.has_function(node.identifier):
             raise SemanticError(f"Invalid redeclaration of '{node.identifier}'", node)
 
         # Check parameter types
@@ -168,9 +186,11 @@ class LittleDuckAnalyzer():
             type_identifier = node.type.identifier
         parameter_list = list(map(lambda n: (n.identifier, n.type.identifier), node.parameters))
 
-        current_scope.add_function(FunctionMetadata(identifier=node.identifier,
+        global_scope.add_function(FunctionMetadata(identifier=node.identifier,
                                                     type=type_identifier,
-                                                    parameters=parameter_list))
+                                                    parameters=parameter_list,
+                                                    returns=False,
+                                                    is_used=True))
         
         # Build quadruple
         quadruple = (QuadrupleOperation.FUNCTION_DECLARATION, node.identifier, None, None)
@@ -180,6 +200,12 @@ class LittleDuckAnalyzer():
 
         # Analize the body
         self.a_FunctionScopeNode(node.body)
+
+        # Make sure function contains at least one return
+        # TODO: Detect return in all paths
+        if not global_scope.functions[node.identifier].returns:
+            type_name = node.type.identifier if node.type else 'void'
+            raise SemanticError(f"Function '{type_name} {node.identifier}' never returns", node)
 
     def a_AssignmentNode(self, node: AssignmentNode):
         # Evaluate expression
@@ -208,6 +234,9 @@ class LittleDuckAnalyzer():
         quadruple = (QuadrupleOperation.ASSIGN, node.identifier, result, None)
         self.quadruples.append(quadruple)
 
+        # Register the variable was initialized
+        variable.is_initialized = True
+
         self.log("Assigned to variable", node.identifier)
 
     def a_VoidFunctionCallNode(self, node: VoidFunctionCallNode):
@@ -216,13 +245,11 @@ class LittleDuckAnalyzer():
             raise SemanticError("Main function cannot be called from within the program", node)
 
         # Check if function exists
-        function: Optional[FunctionMetadata] = None
-        for scope in self.scopes:
-            function = scope.get_function(node.identifier)
-            if function is not None:
-                break
+        global_scope = cast(GlobalScope, self.scopes.bottom())
+        function = global_scope.get_function(node.identifier)
+
         if function is None:
-            raise SemanticError(f"'{node.identifier}' does not exist in this scope", node)
+            raise SemanticError(f"'{node.identifier}' does not exist in this module", node)
         
         # Check if number of arguments match
         if len(function.parameters) != len(node.arguments):
@@ -252,6 +279,9 @@ class LittleDuckAnalyzer():
         # Build call quadruple
         quadruple = (QuadrupleOperation.FUNCTION_CALL, node.identifier, None, None)
         self.quadruples.append(quadruple)
+
+        # Register the function was used
+        global_scope.functions[node.identifier].is_used = True
 
         self.log("Called void function", node.identifier)
 
@@ -377,7 +407,7 @@ class LittleDuckAnalyzer():
                 break
         
         # Get the data for that function
-        global_scope = self.scopes.bottom()
+        global_scope = cast(GlobalScope, self.scopes.bottom())
         function = global_scope.get_function(function_name)
 
         if function is None:
@@ -419,6 +449,9 @@ class LittleDuckAnalyzer():
             quadruple = (QuadrupleOperation.RETURN, None, None, None)
             self.quadruples.append(quadruple)
 
+        # Register the function returned
+        global_scope.functions[function_name].returns = True
+
         self.log("Function return statement")
 
     #
@@ -444,6 +477,13 @@ class LittleDuckAnalyzer():
         
         # Update type of expression
         node.type = TypeNode(variable.type)
+
+        # Check if variable has been initialized
+        if not variable.is_initialized:
+            raise SemanticError(f"'{node.identifier}' was used before being initialized", node)
+
+        # Register the variable was used
+        variable.is_used = True
         
         self.log("Got variable", node.identifier)
 
@@ -456,11 +496,10 @@ class LittleDuckAnalyzer():
             raise SemanticError("Main function cannot be called from within the program", node)
 
         # Check if function exists
-        function: Optional[FunctionMetadata] = None
-        for scope in self.scopes:
-            function = scope.get_function(node.identifier)
-            if function is not None:
-                break
+        # Check if function exists
+        global_scope = cast(GlobalScope, self.scopes.bottom())
+        function = global_scope.get_function(node.identifier)
+
         if function is None:
             raise SemanticError(f"'{node.identifier}' does not exist in this scope", node)
         
@@ -501,6 +540,9 @@ class LittleDuckAnalyzer():
         quadruple = (QuadrupleOperation.FUNCTION_CALL, node.identifier, None, temp_var)
         self.current_temp += 1
         self.quadruples.append(quadruple)
+
+        # Register the function was used
+        global_scope.functions[node.identifier].is_used = True
 
         self.log(f"Called {function.type} function", node.identifier)
 
@@ -619,6 +661,11 @@ class LittleDuckAnalyzer():
     #
     # Helpers
     #
+    # TODO: Warnings
+    # def check_closed_scope(self, scope: Scope):
+    #     # Check if all variables & functions have been intialized, used, etc
+    #     pass
+
     def fill_pending_jump(self, quad_index: int):
         old_quadruple = self.quadruples[quad_index]
         new_quadruple = (old_quadruple[0], old_quadruple[1], old_quadruple[2], len(self.quadruples))
