@@ -2,7 +2,8 @@ from typing import Optional
 
 from pygraphviz import AGraph
 
-from little_duck import LittleDuckAnalyzer, LittleDuckLexer, LittleDuckParser
+from little_duck.analyzer import LittleDuckAnalyzer
+from little_duck.lexer import LittleDuckLexer
 from little_duck.nodes import (
     ASTNode,
     DeclareVariableNode,
@@ -14,6 +15,7 @@ from little_duck.nodes import (
     ScopeNode,
     StatementNode,
 )
+from little_duck.parser import LittleDuckParser
 
 
 def graph_ast(

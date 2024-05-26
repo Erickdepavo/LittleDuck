@@ -1,54 +1,33 @@
-from little_duck import LittleDuckAnalyzer, LittleDuckLexer, LittleDuckParser
-from little_duck.analyzer import qstr
-from little_duck.errors import SemanticError
+import argparse
 
-#
-# Test the compiler
-#
+from little_duck import LittleDuckCompiler
+
+
+def main():
+    # Create the parser
+    parser = argparse.ArgumentParser(description="Little Duck code compiler")
+    
+    # Add arguments
+    parser.add_argument("input_file", type=str, help="Input source file to compile")
+    parser.add_argument("-o","--output_dir", type=str, default=".", help="Directory to place output files")
+    parser.add_argument("-w", "--no_warnings", action="store_true", help="Hide warnings during compilation")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Increase output verbosity")
+
+    # Parse the arguments
+    args = parser.parse_args()
+
+    # Use the arguments
+    if args.debug or args.verbose:
+        print("input_file:", args.input_file)
+        print("output_dir:", args.output_dir)
+        print("no_warnings:", args.no_warnings)
+        print("debug:", args.debug)
+        print("verbose:", args.verbose)
+
+    # Run the compiler
+    compiler = LittleDuckCompiler(debug=args.verbose)
+    compiler.compile(args.input_file)
+
 if __name__ == "__main__":
-    try:
-        # file_name = 'code.ld'
-        file_name = 'algorithms.ld'
-
-        # Build the lexer
-        lexer = LittleDuckLexer()
-        file_contents = ""
-
-        with open(file_name, 'r') as file:
-            file_contents = file.read()
-
-        tokens = lexer.input(file_contents)
-        result = list(map(lambda x: x.type, tokens))
-        print(result)
-        print("File tokenized successfully")
-
-        # Build the parser
-        parser = LittleDuckParser()
-
-        # Test it
-        tree = parser.parse(file_contents, lexer=LittleDuckLexer())
-        print(tree)
-
-        print("File parsed successfully")
-
-        # Analyze
-        analyzer = LittleDuckAnalyzer(debug=True)
-        quadruples, tables = analyzer.analyze(tree)
-
-        print("File analyzed successfully")
-
-        print(tables)
-
-        number_width = len(str(len(quadruples)))
-        for i, quadruple in enumerate(quadruples):
-            amount_of_spaces = number_width - len(str(i))
-            spaces = ' ' * amount_of_spaces
-            print(f"{i}:{spaces} ({', '.join(list(map(qstr, quadruple)))})")
-
-        print("File compiled successfully")
-
-    except SyntaxError as error:
-        print("SyntaxError:", error)
-
-    except SemanticError as error:
-        print("SemanticError:", error.message)
+    main()
