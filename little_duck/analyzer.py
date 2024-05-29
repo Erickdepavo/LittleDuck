@@ -38,10 +38,12 @@ from .scope import FunctionMetadata, GlobalScope, Scope, VariableMetadata
 from .semantic_cubes import binary_semantic_cubes, unary_semantic_cubes
 from .stack import Stack
 
+AnalyzedProgram = Tuple[List[Quadruple], GlobalScope]
 
 class LittleDuckAnalyzer():
     def __init__(self, debug: bool = False):
         self.debug = debug
+        self.module_name = ""
 
         self.scopes = Stack[Scope]()
         self.types: List[TypeNode] = self.default_types()
@@ -49,9 +51,12 @@ class LittleDuckAnalyzer():
         self.quadruples: List[Quadruple] = []
         self.pending_jumps = Stack[int]()
 
-    def analyze(self, program: ProgramNode) -> Tuple[List[Quadruple], GlobalScope]:
+    def analyze(self,
+                program: ProgramNode,
+                dependencies: AnalyzedProgram = ([], GlobalScope())) -> AnalyzedProgram:
         # Analyze Program
-        global_scope = self.a_ProgramNode(program)
+        self.module_name = program.identifier
+        global_scope = self.a_ProgramNode(program, dependencies)
 
         # Return generated quadruples and tables
         return self.quadruples, global_scope
@@ -59,8 +64,9 @@ class LittleDuckAnalyzer():
     #
     # Program & Scope handling
     #
-    def a_ProgramNode(self, node: ProgramNode) -> GlobalScope:
+    def a_ProgramNode(self, node: ProgramNode, dependencies: AnalyzedProgram) -> GlobalScope:
         self.log("Analyzing program", node.identifier)
+        dep_quadruples, dep_scope = dependencies
 
         # Add startup jump
         self.quadruples.append(
@@ -68,11 +74,14 @@ class LittleDuckAnalyzer():
         self.pending_jumps.push(len(self.quadruples) - 1)
 
         # Create global scope
-        global_scope = GlobalScope()
+        global_scope = dep_scope # GlobalScope()
         self.scopes.push(global_scope)
         self.log("Opened scope", "global")
 
         self.a_DeclareVariableNode(DeclareVariableNode('exit_code', TypeNode('int')))
+
+        # Add previous quadruples
+        self.quadruples += dep_quadruples
 
         # Global variables & functions
         for variable in node.global_vars:
@@ -164,6 +173,7 @@ class LittleDuckAnalyzer():
 
         # Variable can be added
         current_scope.add_variable(VariableMetadata(identifier=node.identifier,
+                                                    module=self.module_name,
                                                     type=node.type.identifier,
                                                     is_initialized=False,
                                                     is_used=False,
@@ -195,11 +205,12 @@ class LittleDuckAnalyzer():
         parameter_list = list(map(lambda n: (n.identifier, n.type.identifier), node.parameters))
 
         global_scope.add_function(FunctionMetadata(identifier=node.identifier,
-                                                    type=type_identifier,
-                                                    parameters=parameter_list,
-                                                    returns=False,
-                                                    is_used=node.identifier == 'main',
-                                                    start_index=len(self.quadruples)))
+                                                   module=self.module_name,
+                                                   type=type_identifier,
+                                                   parameters=parameter_list,
+                                                   returns=False,
+                                                   is_used=node.identifier == 'main',
+                                                   start_index=len(self.quadruples)))
         
         # Build quadruple
         # quadruple = (QuadrupleOperation.FUNCTION_DECLARATION, QuadrupleIdentifier(node.identifier), None, None)

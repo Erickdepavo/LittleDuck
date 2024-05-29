@@ -3,6 +3,7 @@ from ply import lex
 # Tokens y palabras reservadas
 reserved = {
     'program': 'PROGRAM',
+    'import': 'import',
     'main': 'MAIN',
     'if': 'IF',
     'else': 'ELSE',

@@ -1,3 +1,5 @@
+import Algorithms;
+
 program ValidTest;
 
 var x : int;
@@ -46,6 +48,8 @@ main {
     if (false && !false || -0) {
         print("Funciona");
     }
+    print("Factorial:", factorial(1));
+    print("Fibonacci:", fibonacci(5));
     return 0;
 }
 end;

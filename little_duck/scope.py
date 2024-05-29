@@ -7,6 +7,7 @@ from .quadruples import QuadrupleConstVariable
 @dataclass
 class VariableMetadata:
     identifier: str
+    module: str
     type: str
     is_initialized: bool
     is_used: bool
@@ -16,6 +17,7 @@ class VariableMetadata:
 @dataclass
 class FunctionMetadata:
     identifier: str
+    module: str
     type: Optional[str]
     parameters: List[Tuple[str, str]]
     returns: bool
@@ -41,6 +43,8 @@ class Scope:
         return None
 
     def add_variable(self, metadata: VariableMetadata):
+        if metadata.identifier == 'exit_code':
+            metadata.declare_index = 0
         self.variables[metadata.identifier] = metadata
 
     def child(self, id: int):

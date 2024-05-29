@@ -145,6 +145,7 @@ class ReturnStatementNode(StatementNode):
 @dataclass
 class ProgramNode(ASTNode):
     identifier: str
+    dependencies: List[str]
     global_vars: List[DeclareVariableNode]
     global_funcs: List[FunctionDeclarationNode]
     main_func: FunctionDeclarationNode

@@ -15,6 +15,11 @@ class SemanticError(LittleDuckError):
     """Little Duck Semantic Analysis Exception"""
     pass
 
+class CompileError(Exception):
+    """Little Duck Compilation Exception"""
+    def __init__(self, message: str, *args) -> None:
+        super().__init__(message, *args)
+        self.message = message
 
 class VirtualMachineError(Exception):
     """Little Duck Virtual Machine Exception"""

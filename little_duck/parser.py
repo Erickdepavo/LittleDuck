@@ -45,13 +45,28 @@ class LittleDuckParser():
     # Parsing rules
     #
     def p_programa(self, p: yacc.YaccProduction):
-        'Programa : PROGRAM ID SEMICOLON VARS FUNCS MAIN Body END SEMICOLON'
-        body = FunctionScopeNode('main', p[7].statements, [])
+        'Programa : IMPORTS PROGRAM ID SEMICOLON VARS FUNCS MAIN Body END SEMICOLON'
+        body = FunctionScopeNode('main', p[8].statements, [])
         main = FunctionDeclarationNode(identifier='main',
                                        type=TypeNode('int'),
                                        parameters=[],
                                        body=body)
-        p[0] = ProgramNode(p[2], p[4], p[5], main)
+        p[0] = ProgramNode(p[3], p[1], p[5], p[6], main)
+        pass
+    
+    def p_imports(self, p: yacc.YaccProduction):
+        'IMPORTS : IMPORT IMPORTS'
+        p[0] = p[1] + p[2]
+        pass
+
+    def p_imports_empty(self, p: yacc.YaccProduction):
+        'IMPORTS : '
+        p[0] = []
+        pass
+
+    def p_import(self, p: yacc.YaccProduction):
+        'IMPORT : import ID SEMICOLON'
+        p[0] = [p[2]]
         pass
 
     def p_vars(self, p: yacc.YaccProduction):
