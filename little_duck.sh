@@ -1,1 +1,1 @@
-python compile.py $@
+python run.py $@
