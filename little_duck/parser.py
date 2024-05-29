@@ -8,6 +8,7 @@ from .nodes import (
     BinaryOperationNode,
     BoolPrimitiveValueNode,
     DeclareVariableNode,
+    DoWhileCycleNode,
     FloatPrimitiveValueNode,
     FunctionDeclarationNode,
     FunctionScopeNode,
@@ -193,9 +194,14 @@ class LittleDuckParser():
         p[0] = IfConditionNode(p[3], p[5], p[7])
         pass
 
-    def p_cycle(self, p: yacc.YaccProduction):
+    def p_cycle_while(self, p: yacc.YaccProduction):
+        'CYCLE : WHILE LPAREN Expresion RPAREN Body'
+        p[0] = WhileCycleNode(condition=p[3], body=p[5])
+        pass
+
+    def p_cycle_do_while(self, p: yacc.YaccProduction):
         'CYCLE : DO Body WHILE LPAREN Expresion RPAREN SEMICOLON'
-        p[0] = WhileCycleNode(condition=p[5], body=p[2])
+        p[0] = DoWhileCycleNode(condition=p[5], body=p[2])
         pass
 
     def p_f_call(self, p: yacc.YaccProduction):

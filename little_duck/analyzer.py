@@ -6,6 +6,7 @@ from .nodes import (
     AssignmentNode,
     BinaryOperationNode,
     DeclareVariableNode,
+    DoWhileCycleNode,
     ExpressionNode,
     FunctionDeclarationNode,
     FunctionScopeNode,
@@ -429,6 +430,42 @@ class LittleDuckAnalyzer():
         self.fill_pending_jump(end_quad_index)
         
         self.log("While statement end")
+
+    def a_DoWhileCycleNode(self, node: DoWhileCycleNode):
+        self.log("DoWhile statement begin")
+
+        # Evaluate expression
+        # This will populate the 'type' field
+        polish_condition = self.analize_expression_node(node.condition)
+        self.log("DoWhile condition expression:", ' '.join(map(qstr, polish_condition)))
+
+        if node.condition.type is None:
+            raise SemanticError("Type of expression could not be inferred", node.condition)
+
+        # Condition must be boolean (int)
+        if node.condition.type.identifier != 'bool':
+            raise SemanticError("Condition on a While statement must be boolean (type 'bool')", node)
+        self.log("DoWhile condition analyzed")
+
+        # NOTE: Punto neurálgico 1
+        # Add pending jump to DO body
+        line_to_jump_to = len(self.quadruples)
+
+        # Analyze cycle body
+        self.a_ScopeNode(node.body)
+
+        # Generate quadruples for condition
+        result = self.process_polish_expression(polish_condition)
+
+        # NOTE: Punto neurálgico 2
+        # # Fill pending jump to start of do-while
+        # self.fill_pending_jump(self.pending_jumps.pop())
+
+        # Create jump to start of do-while (condtion met)
+        condition_quadruple = (QuadrupleOperation.GOTOT, result, None, QuadrupleLineNumber(line_to_jump_to))
+        self.quadruples.append(condition_quadruple)
+        
+        self.log("DoWhile statement end")
     
     def a_ReturnStatementNode(self, node: ReturnStatementNode):
         # Get the function that is returning

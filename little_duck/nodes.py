@@ -136,6 +136,11 @@ class WhileCycleNode(StatementNode):
     body: ScopeNode
 
 @dataclass
+class DoWhileCycleNode(StatementNode):
+    condition: ExpressionNode
+    body: ScopeNode
+
+@dataclass
 class ReturnStatementNode(StatementNode):
     value: Optional[ExpressionNode]
 
