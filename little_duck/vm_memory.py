@@ -153,7 +153,9 @@ class VirtualMachineMemory:
         # Address belongs to activation record
         return self.top().get_type(relative_address - self.local_scope_offset)
     
+    #
     # Conversions
+    #
     def convert_relative_to_global(self, relative_address: int, stack_frame_index: int) -> int:
         if relative_address < self.local_scope_offset:
             # Address belongs to constant or global scope
@@ -163,7 +165,9 @@ class VirtualMachineMemory:
         local_address = relative_address - self.local_scope_offset
         return self.stack_offsets[stack_frame_index] + local_address
 
+    #
     # Checks
+    #
     def validate_global_address_range(self, global_address: int):
         self.log(f"Validating address {global_address} is within 0..<{self.total_size()}")
         if global_address >= self.total_size() or global_address < 0:

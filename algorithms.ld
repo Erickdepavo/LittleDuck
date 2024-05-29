@@ -29,10 +29,10 @@ int fibonacci(n: int) :
 
 main {
     var x: int;
-    x = 5;
+    x = 8;
 
     var fib_count: int;
-    fib_count = 3;
+    fib_count = 10;
 
     print("Factorial de", x, ":", factorial(x));
     print("Fibonacci:");
