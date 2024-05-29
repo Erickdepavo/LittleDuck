@@ -47,7 +47,6 @@ class LittleDuckAnalyzer():
         self.types: List[TypeNode] = self.default_types()
 
         self.quadruples: List[Quadruple] = []
-        self.current_temp: int = 0
         self.pending_jumps = Stack[int]()
 
     def analyze(self, program: ProgramNode) -> Tuple[List[Quadruple], GlobalScope]:
@@ -63,11 +62,17 @@ class LittleDuckAnalyzer():
     def a_ProgramNode(self, node: ProgramNode) -> GlobalScope:
         self.log("Analyzing program", node.identifier)
 
+        # Add startup jump
+        self.quadruples.append(
+            (QuadrupleOperation.GOTO, None, None, None))
+        self.pending_jumps.push(len(self.quadruples) - 1)
+
         # Create global scope
         global_scope = GlobalScope()
         self.scopes.push(global_scope)
-        self.quadruples.append((QuadrupleOperation.OPEN_STACK_FRAME, None, None, None))
         self.log("Opened scope", "global")
+
+        self.a_DeclareVariableNode(DeclareVariableNode('exit_code', TypeNode('int')))
 
         # Global variables & functions
         for variable in node.global_vars:
@@ -80,8 +85,13 @@ class LittleDuckAnalyzer():
 
         # Close global scope
         self.scopes.pop()
-        self.quadruples.append((QuadrupleOperation.CLOSE_STACK_FRAME, None, None, None))
         self.log("Closed scope", "global")
+
+        # Create main func call
+        self.fill_pending_jump(self.pending_jumps.pop())
+        self.quadruples.append(
+            (QuadrupleOperation.FUNCTION_CALL, QuadrupleIdentifier('main'), None, QuadrupleIdentifier('exit_code')))
+
         self.log("Program", node.identifier, "analyzed successfully")
 
         return global_scope
@@ -90,7 +100,7 @@ class LittleDuckAnalyzer():
         parent_scope = self.scopes.top()
 
         # Create scope
-        self.scopes.push(Scope(id=self.scopes.size()))
+        self.scopes.push(Scope(id=len(self.quadruples)))
         self.quadruples.append((QuadrupleOperation.OPEN_STACK_FRAME, None, None, None))
         self.log("Opened scope", node.identifier)
 
@@ -111,8 +121,8 @@ class LittleDuckAnalyzer():
         parent_scope = self.scopes.top()
 
         # Create scope
-        self.scopes.push(Scope(id=self.scopes.size(), function_name=node.identifier))
-        self.quadruples.append((QuadrupleOperation.OPEN_STACK_FRAME, None, None, None))
+        self.scopes.push(Scope(id=len(self.quadruples), function_name=node.identifier))
+        self.quadruples.append((QuadrupleOperation.OPEN_STACK_FRAME, QuadrupleIdentifier(node.identifier), None, None))
         self.log("Opened function scope", node.identifier)
 
         # Build declare quadruples
@@ -156,11 +166,12 @@ class LittleDuckAnalyzer():
         current_scope.add_variable(VariableMetadata(identifier=node.identifier,
                                                     type=node.type.identifier,
                                                     is_initialized=False,
-                                                    is_used=False))
+                                                    is_used=False,
+                                                    declare_index=len(self.quadruples)))
 
         # Build quadruple
-        quadruple = (QuadrupleOperation.DECLARE, QuadrupleIdentifier(node.identifier), None, None)
-        self.quadruples.append(quadruple)
+        # quadruple = (QuadrupleOperation.DECLARE, QuadrupleIdentifier(node.identifier), None, None)
+        # self.quadruples.append(quadruple)
 
         self.log("Declared variable", node.identifier)
         
@@ -187,11 +198,12 @@ class LittleDuckAnalyzer():
                                                     type=type_identifier,
                                                     parameters=parameter_list,
                                                     returns=False,
-                                                    is_used=True))
+                                                    is_used=node.identifier == 'main',
+                                                    start_index=len(self.quadruples)))
         
         # Build quadruple
-        quadruple = (QuadrupleOperation.FUNCTION_DECLARATION, QuadrupleIdentifier(node.identifier), None, None)
-        self.quadruples.append(quadruple)
+        # quadruple = (QuadrupleOperation.FUNCTION_DECLARATION, QuadrupleIdentifier(node.identifier), None, None)
+        # self.quadruples.append(quadruple)
 
         self.log("Declared function", node.identifier)
 
@@ -253,6 +265,8 @@ class LittleDuckAnalyzer():
             raise SemanticError(f"'{node.identifier}' takes {len(function.parameters)}, but {len(node.arguments)} were provided", node)
         
         # Evaluate arguments
+        argument_results: List[Operand] = []
+
         for i, argument in enumerate(node.arguments):
             parameter_name, parameter_type = function.parameters[i]
 
@@ -268,8 +282,12 @@ class LittleDuckAnalyzer():
             if argument.type.identifier != parameter_type:
                 raise SemanticError(f"Parameter '{parameter_name}' is of type '{parameter_type}', not '{argument.type}'", node)
             
-            # Build argument quadruple
+            # Cache result for later
             result = self.process_polish_expression(polish_argument)
+            argument_results.append(result)
+
+        # Build argument quadruples
+        for result in argument_results:
             argument_quadruple = (QuadrupleOperation.FUNCTION_PARAMETER, result, None, None)
             self.quadruples.append(argument_quadruple)
         
@@ -284,13 +302,19 @@ class LittleDuckAnalyzer():
 
     def a_PrintNode(self, node: PrintNode):
         # Evaluate arguments
+        argument_results: List[Operand] = []
+
         for argument in node.arguments:
             # Evaluate expression
             polish_argument = self.analize_expression_node(argument)
             self.log("Print argument expression:", ' '.join(map(qstr, polish_argument)))
 
-            # Build argument quadruple
+            # Cache result for later
             result = self.process_polish_expression(polish_argument)
+            argument_results.append(result)
+
+        # Build argument quadruples
+        for result in argument_results:
             argument_quadruple = (QuadrupleOperation.FUNCTION_PARAMETER, result, None, None)
             self.quadruples.append(argument_quadruple)
 
@@ -485,10 +509,12 @@ class LittleDuckAnalyzer():
         if not variable.is_initialized:
             raise SemanticError(f"'{node.identifier}' was used before being initialized", node)
 
-        temp_var = QuadrupleTempVariable(self.current_temp)
-        quadruple = (QuadrupleOperation.READ, QuadrupleIdentifier(node.identifier), None, temp_var)
-        self.current_temp += 1
-        self.quadruples.append(quadruple)
+        # temp_var = QuadrupleTempVariable(self.current_temp)
+        # quadruple = (QuadrupleOperation.READ, QuadrupleIdentifier(node.identifier), None, temp_var)
+        # self.current_temp += 1
+        # self.quadruples.append(quadruple)
+
+        var = QuadrupleIdentifier(node.identifier)
 
         # Register the variable was used
         variable.is_used = True
@@ -496,7 +522,7 @@ class LittleDuckAnalyzer():
         self.log("Got variable", node.identifier)
 
         # Build polish vector to return
-        return deque([temp_var])
+        return deque([var])
     
     def a_NonVoidFunctionCallNode(self, node: NonVoidFunctionCallNode) -> PolishExpression:
         # Prohibit calling main
@@ -520,6 +546,8 @@ class LittleDuckAnalyzer():
             raise SemanticError(f"'{node.identifier}' takes {len(function.parameters)}, but {len(node.arguments)} were provided", node)
         
         # Evaluate arguments
+        argument_results: List[Operand] = []
+
         for i, argument in enumerate(node.arguments):
             parameter_name, parameter_type = function.parameters[i]
 
@@ -535,8 +563,12 @@ class LittleDuckAnalyzer():
             if argument.type.identifier != parameter_type:
                 raise SemanticError(f"Parameter '{parameter_name}' is of type '{parameter_type}', not '{argument.type}'", node)
             
-            # Build argument quadruple
+            # Cache result for later
             result = self.process_polish_expression(polish_argument)
+            argument_results.append(result)
+
+        # Build argument quadruples
+        for result in argument_results:
             argument_quadruple = (QuadrupleOperation.FUNCTION_PARAMETER, result, None, None)
             self.quadruples.append(argument_quadruple)
         
@@ -544,9 +576,10 @@ class LittleDuckAnalyzer():
         node.type = TypeNode(function.type)
 
         # Build call quadruple
-        temp_var = QuadrupleTempVariable(self.current_temp)
+        current_scope = self.scopes.top()
+        temp_var = QuadrupleTempVariable(current_scope.current_temp)
         quadruple = (QuadrupleOperation.FUNCTION_CALL, QuadrupleIdentifier(node.identifier), None, temp_var)
-        self.current_temp += 1
+        current_scope.current_temp += 1
         self.quadruples.append(quadruple)
 
         # Register the function was used
@@ -648,6 +681,7 @@ class LittleDuckAnalyzer():
     # Polish Expression handling
     #
     def process_polish_expression(self, polish: PolishExpression) -> Operand:
+        current_scope = self.scopes.top()
         stack = Stack[PolishValue]()
 
         # Add first item to the stack
@@ -668,9 +702,9 @@ class LittleDuckAnalyzer():
                 operator = stack.pop()
 
                 # Create operation
-                temp_var = QuadrupleTempVariable(self.current_temp)
+                temp_var = QuadrupleTempVariable(current_scope.current_temp)
                 quadruple = (operator, left_side_value, right_side_value, temp_var)
-                self.current_temp += 1
+                current_scope.current_temp += 1
                 self.quadruples.append(quadruple) # type: ignore[arg-type]
 
                 # Save temp var in stack

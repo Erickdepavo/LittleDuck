@@ -1,7 +1,7 @@
 from enum import Enum
+from typing import Tuple
 
 from .nodes import ASTNode
-from .vm_runner import Quadruple
 
 
 class LittleDuckError(Exception):
@@ -18,8 +18,8 @@ class SemanticError(LittleDuckError):
 
 class VirtualMachineError(Exception):
     """Little Duck Virtual Machine Exception"""
-    def __init__(self, code: int, message: str) -> None:
-        super().__init__(code, message)
+    def __init__(self, code: int, message: str, *args) -> None:
+        super().__init__(code, message, *args)
         self.code = code
         self.message = message
 
@@ -41,8 +41,8 @@ class VirtualMachineRuntimeError(VirtualMachineError):
     def __init__(self,
                  error: VirtualMachineRuntimeErrors,
                  index: int,
-                 quadruple: Quadruple) -> None:
-        super().__init__(*error.value)
+                 quadruple: Tuple[int, int | None, int | None, int | None]) -> None:
+        super().__init__(*error.value, index)
         self.index = index
 
 class VirtualMachineMemoryErrors(Enum):
@@ -56,5 +56,5 @@ class VirtualMachineMemoryError(VirtualMachineError):
     def __init__(self,
                  error: VirtualMachineMemoryErrors,
                  address: int) -> None:
-        super().__init__(*error.value)
+        super().__init__(*error.value, address)
         self.address = address

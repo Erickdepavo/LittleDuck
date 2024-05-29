@@ -1,59 +1,68 @@
+from typing import Callable, List, TypeVar
+
 from .analyzer import LittleDuckAnalyzer, qstr
-from .errors import SemanticError
+from .code_generator import LittleDuckCodeGenerator
 from .lexer import LittleDuckLexer
 from .parser import LittleDuckParser
+from .vm_types import GeneratedCode
 
 
 class LittleDuckCompiler():
     def __init__(self, debug: bool = False):
         self.debug = debug
 
-    def compile(self, file_name: str):
+    def compile(self, file_name: str) -> GeneratedCode:
         lexer = LittleDuckLexer()
         parser = LittleDuckParser()
         analyzer = LittleDuckAnalyzer(debug=self.debug)
+        code_generator = LittleDuckCodeGenerator(debug=self.debug)
 
-        try:
-            # Get the file contents
-            file_contents = ""
-            with open(file_name, 'r') as file:
-                file_contents = file.read()
+        # Get the file contents
+        file_contents = ""
+        with open(file_name, 'r') as file:
+            file_contents = file.read()
 
-            # Only lex if token list will be shown
-            if self.debug:
-                new_lexer = LittleDuckLexer()
-                tokens = new_lexer.input(file_contents)
-                result = list(map(lambda x: x.type, tokens))
-                self.log(result)
-                self.log("File tokenized successfully")
+        # Only lex if token list will be shown
+        if self.debug:
+            new_lexer = LittleDuckLexer()
+            tokens = new_lexer.input(file_contents)
+            result = list(map(lambda x: x.type, tokens))
+            self.log(result)
+            self.log("File tokenized successfully")
 
-            # Parse the code
-            tree = parser.parse(file_contents, lexer=lexer)
-            self.log(tree)
-            self.log("File parsed successfully")
+        # Parse the code
+        tree = parser.parse(file_contents, lexer=lexer)
+        self.log(tree)
+        self.log("File parsed successfully")
 
-            # Analyze the code
-            quadruples, tables = analyzer.analyze(tree)
-            self.log("File analyzed successfully")
-            
-            if self.debug:
-                self.log(tables)
+        # Analyze the code
+        raw_quadruples, tables = analyzer.analyze(tree)
+        self.log("File analyzed successfully")
+        
+        if self.debug:
+            self.log(tables)
+            self.log_list(raw_quadruples, lambda q: f"({', '.join(list(map(qstr, q)))})")
 
-                number_width = len(str(len(quadruples)))
-                for i, quadruple in enumerate(quadruples):
-                    amount_of_spaces = number_width - len(str(i))
-                    spaces = ' ' * amount_of_spaces
-                    self.log(f"{i}:{spaces} ({', '.join(list(map(qstr, quadruple)))})")
+        # Generate intermediate code
+        code = code_generator.generate(tables, raw_quadruples)
 
-            # Generate intermediate code file
-            # ...
-            self.log("File compiled successfully")
+        if self.debug:
+            func_dir, mem_list, constants, quadruples = code
 
-        except SyntaxError as error:
-            print("SyntaxError:", error)
+            self.log("Constants:")
+            self.log_list(constants, str)
 
-        except SemanticError as error:
-            print("SemanticError:", error.message)
+            self.log("Function directory:")
+            self.log_list(func_dir, str)
+
+            self.log("Memory scope templates:")
+            self.log_list(mem_list, str)
+
+            self.log("Final Quadruples:")
+            self.log_list(quadruples, lambda q: f"({', '.join(list(map(str, q)))})")
+
+        self.log("File compiled successfully")
+        return code
 
     #
     # Debug
@@ -61,3 +70,14 @@ class LittleDuckCompiler():
     def log(self, *args):
         if self.debug:
             print(*args)
+
+    T = TypeVar('T')
+    def log_list(self, values: List[T], text: Callable[[T], str]):
+        if not self.debug:
+            return
+        
+        number_width = len(str(len(values)))
+        for i, value in enumerate(values):
+            amount_of_spaces = number_width - len(str(i))
+            spaces = ' ' * amount_of_spaces
+            print(f"{i}:{spaces} {text(value)}")

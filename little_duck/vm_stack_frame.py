@@ -16,7 +16,9 @@ class ActivationRecordTemplate:
     return_value_address: Optional[int] # Global address to return
 
 class ActivationRecord:
-    def __init__(self, template: ActivationRecordTemplate) -> None:
+    def __init__(self, template: ActivationRecordTemplate, debug: bool) -> None:
+        self.debug = debug
+
         self.identifier = template.identifier
         self.activation_address = template.activation_address
         self.return_address = template.return_address
@@ -43,7 +45,8 @@ class ActivationRecord:
 
     # Read from memory
     def get(self, local_address: int) -> Any:
-        i = self.get_stack_frame_index(local_address)
+        self.log(f"Trying to read local {local_address}")
+        i = self.get_memory_scope_index(local_address)
         try:
             return self.memory_scopes[i].get_local(local_address - self.scope_offsets[i])
         except MemoryError as error:
@@ -51,7 +54,8 @@ class ActivationRecord:
             raise error
     
     def allocate(self, local_address: int, value: Any):
-        i = self.get_stack_frame_index(local_address)
+        self.log(f"Trying to allocate local {local_address}")
+        i = self.get_memory_scope_index(local_address)
         try:
             return self.memory_scopes[i].set_local(local_address - self.scope_offsets[i], value)
         except MemoryError as error:
@@ -59,16 +63,17 @@ class ActivationRecord:
             raise error
     
     def deallocate(self, local_address: int):
+        self.log(f"Trying to deallocate local {local_address}")
         return self.allocate(local_address, None)
 
     def get_type(self, local_address: int):
-        i = self.get_stack_frame_index(local_address)
+        self.log(f"Trying to get type of local {local_address}")
+        i = self.get_memory_scope_index(local_address)
         return self.memory_scopes[i].get_type(local_address - self.scope_offsets[i])
 
     # Parameter stack
     def parameter_push(self, global_address: int):
-        i = self.get_stack_frame_index(global_address)
-        self.memory_scopes[i].parameter_store.append(global_address)
+        self.memory_scopes[-1].parameter_store.append(global_address)
     
     def parameter_pop(self) -> List[int]:
         value = self.memory_scopes[-1].parameter_store
@@ -77,6 +82,7 @@ class ActivationRecord:
     
     # Checks
     def validate_address_range(self, local_address: int):
+        self.log(f"Validating address {local_address} is within 0..<{self.total_size}")
         if local_address >= self.total_size or local_address < 0:
             raise MemoryError(Errors.ADDRESS_OUTSIDE_RANGE, local_address)
         
@@ -84,12 +90,21 @@ class ActivationRecord:
         self.validate_address_range(local_address)
         return self.get_type(local_address) is None
     
-    def get_stack_frame_index(self, local_address: int) -> int:
+    def get_memory_scope_index(self, local_address: int) -> int:
         self.validate_address_range(local_address)
 
+        # self.log("Looking for local address:", local_address, "in offsets", self.scope_offsets)
         for i, offset in reversed_enumerated(self.scope_offsets):
-            if local_address > offset:
+            # self.log("Offset", offset, "scope", i)
+            if local_address >= offset:
                 return i
 
         # NOTE: This should never happen, it would be a VM bug
         raise ValueError("Real address could not be found")
+    
+    #
+    # Debug
+    #
+    def log(self, *args):
+        if self.debug:
+            print(f"    ActivationRecord {self.identifier}:", *args)

@@ -13,8 +13,7 @@ class VirtualMachineInstruction(Enum):
     GOTOT = 3
     GOTOF = 4
     # Variables
-    # DECLARE = 9
-    READ = 5
+    # DECLARE = 5
     ASSIGN = 6
     # Funciones
     # FUNCTION_DECLARATION = 6

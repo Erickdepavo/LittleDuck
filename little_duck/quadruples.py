@@ -58,16 +58,15 @@ class QuadrupleOperation(Enum):
     # Estatutos de control de flujo
     RETURN = 'RETURN'
     # Funciones
-    FUNCTION_DECLARATION = 'FUNCTION'
-    FUNCTION_ARGUMENT = 'ARG'
-    FUNCTION_CALL = 'CALL'
+    # FUNCTION_DECLARATION = 'FUNCTION'
     FUNCTION_PARAMETER = 'PARAM'
+    FUNCTION_CALL = 'CALL'
+    FUNCTION_ARGUMENT = 'ARG'
     # Acciones de la consola
     PRINT = 'PRINT'
     # Variables
-    DECLARE = 'DECLARE'
+    # DECLARE = 'DECLARE'
     ASSIGN = 'ASSIGN'
-    READ = 'READ'
     # Aritmética
     ADDITION = '+'
     SUBTRACTION = '-'
@@ -84,11 +83,10 @@ class QuadrupleOperation(Enum):
     NOT = '!'
 
 
-Identifier = QuadrupleIdentifier
-Operand = QuadrupleConstVariable | QuadrupleTempVariable
-Result =  QuadrupleTempVariable | QuadrupleLineNumber
+Operand = QuadrupleConstVariable | QuadrupleTempVariable | QuadrupleIdentifier
+Result =  QuadrupleTempVariable | QuadrupleIdentifier | QuadrupleLineNumber
 
-Quadruple = Tuple[QuadrupleOperation, Optional[Operand | Identifier], Optional[Operand], Optional[Result | Identifier]]
+Quadruple = Tuple[QuadrupleOperation, Optional[Operand], Optional[Operand], Optional[Result]]
 
 PolishValue = QuadrupleOperation | Operand
 PolishExpression = Deque[PolishValue]

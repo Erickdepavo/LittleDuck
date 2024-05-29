@@ -16,12 +16,12 @@ class MemoryScopeTemplate:
     temp_count: int
     
     def size(self) -> int:
-        return (1 + self.int_count + self.bool_count +
+        return (self.int_count + self.bool_count +
                 self.float_count + self.str_count + self.temp_count)
 
 class MemoryScope:
     def __init__(self, template: MemoryScopeTemplate) -> None:
-        self.int_offset = 1
+        self.int_offset = 0
         self.bool_offset = self.int_offset + template.int_count
         self.float_offset = self.bool_offset + template.bool_count
         self.str_offset = self.float_offset + template.float_count
@@ -31,8 +31,8 @@ class MemoryScope:
         self.registry: List = [None] * self.size
         self.parameter_store: List[int] = []
 
-        # Save activation address in registry
-        self.registry[0] = template.activation_address
+        # Save activation address
+        self.activation_address = template.activation_address
 
     def get_local(self, address: int) -> Any:
         value = self.registry[address]
@@ -56,4 +56,4 @@ class MemoryScope:
             return None
         
     def get_activation_address(self) -> int:
-        return self.registry[0]
+        return self.activation_address

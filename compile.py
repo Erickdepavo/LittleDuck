@@ -1,6 +1,7 @@
 import argparse
 
-from little_duck import LittleDuckCompiler
+from little_duck import LittleDuckCompiler, LittleDuckVirtualMachineRunner
+from little_duck.errors import SemanticError, VirtualMachineError
 
 
 def main():
@@ -25,9 +26,24 @@ def main():
         print("debug:", args.debug)
         print("verbose:", args.verbose)
 
-    # Run the compiler
-    compiler = LittleDuckCompiler(debug=args.verbose)
-    compiler.compile(args.input_file)
+    try:
+        # Run the compiler
+        compiler = LittleDuckCompiler(debug=args.verbose)
+        generated_code = compiler.compile(args.input_file)
+
+        # Run the code
+        runner = LittleDuckVirtualMachineRunner(debug=args.verbose)
+        runner.run_from_code(generated_code)
+
+    except SyntaxError as error:
+        print("SyntaxError:", error)
+
+    except SemanticError as error:
+        print("SemanticError:", error.message)
+    
+    except VirtualMachineError as error:
+        print("VirtualMachineError:", error.message)
+
 
 if __name__ == "__main__":
     main()
