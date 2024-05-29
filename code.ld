@@ -17,9 +17,9 @@ void function1(id : int) :
 /*
     Block comment
 */
-void function2(id : float) :
+void function2(n : float, m: int) :
 {
-    print (id + 3.14);
+    print (n + 3.14, m);
     return;
 }
 

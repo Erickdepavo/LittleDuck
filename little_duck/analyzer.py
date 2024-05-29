@@ -1,5 +1,5 @@
 from collections import deque
-from typing import Any, Deque, List, Optional, Tuple, cast
+from typing import List, Optional, Tuple, cast
 
 from .errors import SemanticError
 from .nodes import (
@@ -24,7 +24,13 @@ from .nodes import (
     WhileCycleNode,
 )
 from .quadruples import (
-    PolishVariable,
+    Operand,
+    PolishExpression,
+    PolishValue,
+    Quadruple,
+    QuadrupleConstVariable,
+    QuadrupleIdentifier,
+    QuadrupleLineNumber,
     QuadrupleOperation,
     QuadrupleTempVariable,
 )
@@ -40,11 +46,11 @@ class LittleDuckAnalyzer():
         self.scopes = Stack[Scope]()
         self.types: List[TypeNode] = self.default_types()
 
-        self.quadruples: List[Tuple] = []
+        self.quadruples: List[Quadruple] = []
         self.current_temp: int = 0
         self.pending_jumps = Stack[int]()
 
-    def analyze(self, program: ProgramNode) -> Tuple[List[Tuple], GlobalScope]:
+    def analyze(self, program: ProgramNode) -> Tuple[List[Quadruple], GlobalScope]:
         # Analyze Program
         global_scope = self.a_ProgramNode(program)
 
@@ -104,29 +110,20 @@ class LittleDuckAnalyzer():
     def a_FunctionScopeNode(self, node: FunctionScopeNode):
         parent_scope = self.scopes.top()
 
-        # Load args into temp variables
-        for i, argument in enumerate(node.arguments):
-            # Build load quadruple
-            argument_quadruple = (QuadrupleOperation.FUNCTION_LOAD_ARGUMENT, argument.identifier, None, QuadrupleTempVariable(self.current_temp + i))
-            self.quadruples.append(argument_quadruple)
-
         # Create scope
         self.scopes.push(Scope(id=self.scopes.size(), function_name=node.identifier))
         self.quadruples.append((QuadrupleOperation.OPEN_STACK_FRAME, None, None, None))
         self.log("Opened function scope", node.identifier)
 
-        # Analyze first statements (argument declaration & assignment)
-        for i, argument in enumerate(node.arguments):
-            # Build declare quadruple 
+        # Build declare quadruples
+        for argument in node.arguments:
             self.a_DeclareVariableNode(argument)
 
-            # Build assign quadruple
-            assign_quadruple = (QuadrupleOperation.ASSIGN, argument.identifier, QuadrupleTempVariable(self.current_temp + i), None)
+        # Build arg loading quadruples
+        for argument in reversed(node.arguments):
+            assign_quadruple = (QuadrupleOperation.FUNCTION_ARGUMENT, None, None, QuadrupleIdentifier(argument.identifier))
             self.quadruples.append(assign_quadruple)
             self.scopes.top().variables[argument.identifier].is_initialized = True
-
-        # Increment current temp (because of arg loading)
-        self.current_temp += len(node.arguments)
 
         # Analyze statements
         for statement in node.statements:
@@ -162,7 +159,7 @@ class LittleDuckAnalyzer():
                                                     is_used=False))
 
         # Build quadruple
-        quadruple = (QuadrupleOperation.DECLARE, node.identifier, None, None)
+        quadruple = (QuadrupleOperation.DECLARE, QuadrupleIdentifier(node.identifier), None, None)
         self.quadruples.append(quadruple)
 
         self.log("Declared variable", node.identifier)
@@ -193,7 +190,7 @@ class LittleDuckAnalyzer():
                                                     is_used=True))
         
         # Build quadruple
-        quadruple = (QuadrupleOperation.FUNCTION_DECLARATION, node.identifier, None, None)
+        quadruple = (QuadrupleOperation.FUNCTION_DECLARATION, QuadrupleIdentifier(node.identifier), None, None)
         self.quadruples.append(quadruple)
 
         self.log("Declared function", node.identifier)
@@ -231,7 +228,7 @@ class LittleDuckAnalyzer():
         
         # Build quadruple
         result = self.process_polish_expression(polish)
-        quadruple = (QuadrupleOperation.ASSIGN, node.identifier, result, None)
+        quadruple = (QuadrupleOperation.ASSIGN, result, None, QuadrupleIdentifier(node.identifier))
         self.quadruples.append(quadruple)
 
         # Register the variable was initialized
@@ -277,7 +274,7 @@ class LittleDuckAnalyzer():
             self.quadruples.append(argument_quadruple)
         
         # Build call quadruple
-        quadruple = (QuadrupleOperation.FUNCTION_CALL, node.identifier, None, None)
+        quadruple = (QuadrupleOperation.FUNCTION_CALL, QuadrupleIdentifier(node.identifier), None, None)
         self.quadruples.append(quadruple)
 
         # Register the function was used
@@ -390,7 +387,7 @@ class LittleDuckAnalyzer():
         evaluation_quad_index = self.pending_jumps.pop()
 
         # Create filled jump back to expression evaluation after running body
-        end_quadruple = (QuadrupleOperation.GOTO, None, None, evaluation_quad_index)
+        end_quadruple = (QuadrupleOperation.GOTO, None, None, QuadrupleLineNumber(evaluation_quad_index))
         self.quadruples.append(end_quadruple)
 
         # Fill pending jump to end of while
@@ -436,8 +433,7 @@ class LittleDuckAnalyzer():
 
             # Build quadruple
             result = self.process_polish_expression(polish)
-            quadruple = (QuadrupleOperation.RETURN, result, None, None)
-            self.quadruples.append(quadruple)
+            self.quadruples.append((QuadrupleOperation.RETURN, result, None, None))
 
         else:
             # Trying to return void
@@ -446,8 +442,7 @@ class LittleDuckAnalyzer():
                 raise SemanticError(f"Trying to return void in {function.type} function {function.identifier}", node)
             
             # Build quadruple
-            quadruple = (QuadrupleOperation.RETURN, None, None, None)
-            self.quadruples.append(quadruple)
+            self.quadruples.append((QuadrupleOperation.RETURN, None, None, None))
 
         # Register the function returned
         global_scope.functions[function_name].returns = True
@@ -458,14 +453,22 @@ class LittleDuckAnalyzer():
     # Expression analyzers
     # Must return polish expression as a deque
     #
-    def a_ValueNode(self, node: ValueNode) -> Deque[Any]:
+    def a_ValueNode(self, node: ValueNode) -> PolishExpression:
         # Passthrough value type
         node.type = TypeNode(node.value.primitive_type)
         self.log("Literal of type", node.value.primitive_type, ":", qstr(node.value.value))
-        # Build polish vector to return
-        return deque([node.value.value])
 
-    def a_ReadVariableNode(self, node: ReadVariableNode) -> Deque[Any]:
+        # Create const object
+        const_var = QuadrupleConstVariable(node.value.primitive_type, node.value.value)
+
+        # Register constant in global scope
+        global_scope = cast(GlobalScope, self.scopes.bottom())
+        global_scope.constants.add(const_var)
+
+        # Build polish vector to return
+        return deque([const_var])
+
+    def a_ReadVariableNode(self, node: ReadVariableNode) -> PolishExpression:
         # Check if variable exists
         variable: Optional[VariableMetadata] = None
         for scope in self.scopes:
@@ -482,15 +485,20 @@ class LittleDuckAnalyzer():
         if not variable.is_initialized:
             raise SemanticError(f"'{node.identifier}' was used before being initialized", node)
 
+        temp_var = QuadrupleTempVariable(self.current_temp)
+        quadruple = (QuadrupleOperation.READ, QuadrupleIdentifier(node.identifier), None, temp_var)
+        self.current_temp += 1
+        self.quadruples.append(quadruple)
+
         # Register the variable was used
         variable.is_used = True
         
         self.log("Got variable", node.identifier)
 
         # Build polish vector to return
-        return deque([PolishVariable(node.identifier)])
+        return deque([temp_var])
     
-    def a_NonVoidFunctionCallNode(self, node: NonVoidFunctionCallNode) -> Deque[Any]:
+    def a_NonVoidFunctionCallNode(self, node: NonVoidFunctionCallNode) -> PolishExpression:
         # Prohibit calling main
         if node.identifier == 'main':
             raise SemanticError("Main function cannot be called from within the program", node)
@@ -537,7 +545,7 @@ class LittleDuckAnalyzer():
 
         # Build call quadruple
         temp_var = QuadrupleTempVariable(self.current_temp)
-        quadruple = (QuadrupleOperation.FUNCTION_CALL, node.identifier, None, temp_var)
+        quadruple = (QuadrupleOperation.FUNCTION_CALL, QuadrupleIdentifier(node.identifier), None, temp_var)
         self.current_temp += 1
         self.quadruples.append(quadruple)
 
@@ -549,7 +557,7 @@ class LittleDuckAnalyzer():
         # Build polish vector to return
         return deque([temp_var])
 
-    def a_BinaryOperationNode(self, node: BinaryOperationNode) -> Deque[Any]:
+    def a_BinaryOperationNode(self, node: BinaryOperationNode) -> PolishExpression:
         # Evaluate expressions
         # This will populate the 'type' field
         polish_left = self.analize_expression_node(node.left_side)
@@ -571,9 +579,9 @@ class LittleDuckAnalyzer():
         self.log("Performed binary operation", node.operator.value)
 
         # Build polish vector to return
-        return deque([node.operator]) + polish_left + polish_right
+        return self.create_binary_polish(node.operator, polish_left, polish_right)
 
-    def a_UnaryOperationNode(self, node: UnaryOperationNode) -> Deque[Any]:
+    def a_UnaryOperationNode(self, node: UnaryOperationNode) -> PolishExpression:
         # Evaluate expression
         # This will populate the 'type' field
         polish = self.analize_expression_node(node.expression)
@@ -593,21 +601,60 @@ class LittleDuckAnalyzer():
         self.log("Performed unary operation", node.operator.value)
 
         # Build polish vector to return
-        op_deque: Deque[Any] = deque([node.operator])
-        unary_deque: Deque[None] = deque([None])
-        return op_deque + polish + unary_deque
+        return self.create_unary_polish(node.operator, polish)
+
+    #
+    # Operator shortcuts
+    #
+    def create_binary_polish(self,
+                             operator: QuadrupleOperation,
+                             polish_left: PolishExpression,
+                             polish_right: PolishExpression) -> PolishExpression:
+        global_scope = cast(GlobalScope, self.scopes.bottom())
+
+        # Return variation based on shortcutted operator
+        if operator == QuadrupleOperation.NOTEQUALS:
+            equals = QuadrupleOperation.EQUALS
+            false = QuadrupleConstVariable('bool', False)
+            global_scope.constants.add(false)
+
+            return deque([equals, equals, *polish_left, *polish_right, false])
+
+        # Standard polish expression
+        return deque([operator, *polish_left, *polish_right])
+
+    def create_unary_polish(self,
+                            operator: QuadrupleOperation,
+                            value: PolishExpression) -> PolishExpression:
+        global_scope = cast(GlobalScope, self.scopes.bottom())
+
+        # Get operation and right side const
+        if operator == QuadrupleOperation.SUBTRACTION:
+            new_operator = QuadrupleOperation.MULTIPLICATION
+            const_var = QuadrupleConstVariable('int', -1)
+        elif operator == QuadrupleOperation.NOT:
+            new_operator = QuadrupleOperation.EQUALS
+            const_var = QuadrupleConstVariable('bool', False)
+        else:
+            raise ValueError("Unary operator", operator, "not implemented")
+        
+        # Register constant in global scope
+        global_scope.constants.add(const_var)
+
+        # Build final polish expression
+        return deque([new_operator, *value, const_var])
 
     #
     # Polish Expression handling
     #
-    def process_polish_expression(self, polish: Deque[Any]):
-        stack = Stack[Any]()
+    def process_polish_expression(self, polish: PolishExpression) -> Operand:
+        stack = Stack[PolishValue]()
 
         # Add first item to the stack
-        stack.push(self.process_polish_token(polish.popleft()))
+        stack.push(polish.popleft())
         
         # If first token is operation, more operations should be coming
-        while len(stack) > 1 or isinstance(stack.top(), QuadrupleOperation):            
+        while len(stack) > 1 or isinstance(stack.top(), QuadrupleOperation):
             # See if operation can be processed
             if (
                 len(stack) > 2 and \
@@ -624,14 +671,14 @@ class LittleDuckAnalyzer():
                 temp_var = QuadrupleTempVariable(self.current_temp)
                 quadruple = (operator, left_side_value, right_side_value, temp_var)
                 self.current_temp += 1
-                self.quadruples.append(quadruple)
+                self.quadruples.append(quadruple) # type: ignore[arg-type]
 
                 # Save temp var in stack
                 stack.push(temp_var)
             else:
                 # If no operation is currently possible,
                 # get more tokens from polish vector
-                stack.push(self.process_polish_token(polish.popleft()))
+                stack.push(polish.popleft())
                 # NOTE: Should never crash, because if deque has been
                 # fully read, all operations should be solvable
                 # A crash would indicate this algorithm is wrong
@@ -639,24 +686,7 @@ class LittleDuckAnalyzer():
         # At this point, stack will always have only 1 item
         # Process and return that remaining item
         # (remember one item polish vectors skip the while loop entirely)
-        return self.process_polish_token(stack.pop())
-
-    def process_polish_token(self, value: Any):
-        if isinstance(value, QuadrupleTempVariable):
-            # Variable has already been added to quadruples
-            return value
-        elif isinstance(value, PolishVariable):
-            # Read variable
-            temp_var = QuadrupleTempVariable(self.current_temp)
-            quadruple = (QuadrupleOperation.READ, value.identifier, None, temp_var)
-            self.current_temp += 1
-            self.quadruples.append(quadruple)
-            return temp_var
-        # elif isinstance(value, PolishFunction):
-        # ...
-        else:
-            # Value here is either temp variable or literal
-            return value
+        return stack.pop() # type: ignore[return-value]
 
     #
     # Helpers
@@ -668,10 +698,10 @@ class LittleDuckAnalyzer():
 
     def fill_pending_jump(self, quad_index: int):
         old_quadruple = self.quadruples[quad_index]
-        new_quadruple = (old_quadruple[0], old_quadruple[1], old_quadruple[2], len(self.quadruples))
+        new_quadruple = (old_quadruple[0], old_quadruple[1], old_quadruple[2], QuadrupleLineNumber(len(self.quadruples)))
         self.quadruples[quad_index] = new_quadruple
 
-    def analize_expression_node(self, node: ExpressionNode) -> Deque[Any]:
+    def analize_expression_node(self, node: ExpressionNode) -> PolishExpression:
         # Analyze depending on node type
         analyze_node = getattr(self, 'a_' + type(node).__name__)
         return analyze_node(node)
@@ -701,10 +731,8 @@ class LittleDuckAnalyzer():
             print(*args)
 
 def qstr(value) -> str:
+    if isinstance(value, QuadrupleOperation):
+        return value.value
     if isinstance(value, str):
         return f'"{value}"'
-    elif isinstance(value, PolishVariable):
-        return value.identifier
-    elif isinstance(value, QuadrupleOperation):
-        return value.value
     return str(value)

@@ -1,5 +1,7 @@
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
+
+from .quadruples import QuadrupleConstVariable
 
 
 @dataclass
@@ -45,6 +47,7 @@ class GlobalScope(Scope):
     def __init__(self) -> None:
         super().__init__(0, None)
         self.functions: Dict[str, FunctionMetadata] = {}
+        self.constants: Set[QuadrupleConstVariable] = set()
     
     def has_function(self, identifier: str) -> bool:
         return identifier in self.functions
